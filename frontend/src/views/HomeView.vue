@@ -570,7 +570,7 @@ const navigateToPartner = (website?: string) => {
       <div class="hero-overlay"></div>
       <div class="hero-container">
         <div class="hero-content">
-          <h1 class="hero-title">Halo Informatics!</h1>
+          <h1 class="hero-title">Halo WONG NYENI!</h1>
           <p class="hero-subtitle">
             Selamat Datang di HMP TI UNESA, wadah inspiratif tempat mahasiswa berkarya, berinovasi, dan berkolaborasi 
             untuk mewujudkan masa depan teknologi yang gemilang!
