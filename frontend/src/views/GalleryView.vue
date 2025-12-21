@@ -1,15 +1,15 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
-import galleryData from '@/data/gallery.json'
+import axios from 'axios'
 
 interface GalleryItem {
-  id: number
+  id: string
   imageUrl: string
   title: string
   category: string
   date: string
   description: string
-  eventId: number
+  eventId: string | number // Allow string ID from backend or derived ID
 }
 
 interface Category {
@@ -18,11 +18,19 @@ interface Category {
   icon: string
 }
 
-// Data galeri dari file JSON
-const galleryItems = ref<GalleryItem[]>(galleryData.galleryItems)
+// Data galeri
+const galleryItems = ref<GalleryItem[]>([])
+const loading = ref(true)
+const error = ref('')
 
 // Filter dan state
-const categories = ref<Category[]>(galleryData.categories)
+const categories = ref<Category[]>([
+  { id: 'all', name: 'Semua', icon: '🖼️' },
+  { id: 'events', name: 'Kegiatan', icon: '🎉' },
+  { id: 'workshops', name: 'Workshop', icon: '🛠️' },
+  { id: 'competitions', name: 'Kompetisi', icon: '🏆' },
+  { id: 'gatherings', name: 'Gathering', icon: '👥' }
+])
 const selectedCategory = ref('all')
 const searchQuery = ref('')
 const selectedItem = ref<GalleryItem | null>(null)
@@ -31,17 +39,27 @@ const currentView = ref('grid')
 
 // Pagination state
 const currentPage = ref(1)
-const itemsPerPage = ref(12) // Meningkatkan jumlah item per halaman untuk galeri foto
+const itemsPerPage = ref(12) 
 
-// Mengelompokkan galeri berdasarkan event
+// Mengelompokkan galeri berdasarkan event (derived from title or eventId)
 const eventGroups = computed(() => {
-  const groups: Record<number, GalleryItem[]> = {}
+  const groups: Record<string, GalleryItem[]> = {}
   
   galleryItems.value.forEach(item => {
-    if (!groups[item.eventId]) {
-      groups[item.eventId] = []
+    // Determine a grouping key. If eventId exists, use it. Otherwise, use title prefix (e.g., "Seminar AI" from "Seminar AI - Foto 1")
+    let groupKey: string = item.eventId ? item.eventId.toString() : ''
+    
+    if (!groupKey || groupKey === '0') {
+        const titleParts = item.title.split(' - ')
+        groupKey = titleParts[0].trim()
+        // Also assign this key to item for consistent lookups
+        item.eventId = groupKey
     }
-    groups[item.eventId].push(item)
+
+    if (!groups[groupKey]) {
+      groups[groupKey] = []
+    }
+    groups[groupKey].push(item)
   })
   
   return groups
@@ -49,13 +67,13 @@ const eventGroups = computed(() => {
 
 // Mendapatkan event utama untuk ditampilkan
 const eventsToDisplay = computed(() => {
-  const events: Array<{eventId: number, mainItem: GalleryItem, photoCount: number}> = []
+  const events: Array<{eventId: string | number, mainItem: GalleryItem, photoCount: number}> = []
   
-  Object.entries(eventGroups.value).forEach(([eventId, items]) => {
+  Object.entries(eventGroups.value).forEach(([key, items]) => {
     if (items.length > 0) {
       // Menggunakan item pertama sebagai representasi kegiatan
       events.push({
-        eventId: Number(eventId),
+        eventId: key,
         mainItem: items[0],
         photoCount: items.length
       })
@@ -64,6 +82,44 @@ const eventsToDisplay = computed(() => {
   
   return events
 })
+
+// Fetch gallery items
+const fetchGallery = async () => {
+    try {
+        loading.value = true
+        const response = await axios.get('/api/gallery', { params: { limit: 100 } })
+        
+        // Handle response.data.galleryItems based on galleryController
+        const backendItems = response.data.galleryItems || (Array.isArray(response.data) ? response.data : [])
+
+        if (Array.isArray(backendItems)) {
+            galleryItems.value = backendItems.map((item: any) => {
+                const dateObj = new Date(item.metadata?.date || item.createdAt)
+                 // Format date: dd MMMM yyyy
+                const formattedDate = dateObj.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })
+                
+                // Ensure imageUrl is valid
+                const imageUrl = item.fileUrl || item.thumbnail || ''
+
+                return {
+                    id: item._id,
+                    imageUrl: imageUrl,
+                    title: item.title,
+                    category: item.category,
+                    date: formattedDate,
+                    description: item.description,
+                    eventId: item.metadata?.event?._id || 0 // Default to 0 if null
+                }
+            })
+        }
+    } catch (err) {
+        console.error('Error fetching gallery:', err)
+        error.value = 'Gagal memuat galeri'
+    } finally {
+        loading.value = false
+    }
+}
+
 
 // Computed untuk item yang difilter
 const filteredEvents = computed(() => {
@@ -105,8 +161,12 @@ const paginatedEvents = computed(() => {
   return filteredEvents.value.slice(startIndex, endIndex)
 })
 
-// Statistik galeri
-const galleryStats = ref(galleryData.galleryStats)
+// Statistik galeri (Dynamic)
+const galleryStats = computed(() => [
+    { id: 1, number: `${galleryItems.value.length}+`, label: 'Foto Dokumentasi' },
+    { id: 2, number: `${eventsToDisplay.value.length}+`, label: 'Kegiatan' },
+    { id: 3, number: '5+', label: 'Tahun Arsip' } // Hardcoded for now
+])
 
 // Pagination methods
 const goToPage = (page: number) => {
@@ -168,7 +228,7 @@ const showItemDetails = (item: GalleryItem) => {
   // Log untuk debugging
   console.log('Selected item:', item)
   console.log('Event ID:', item.eventId)
-  console.log('Related photos:', eventGroups.value[item.eventId])
+  console.log('Related photos:', eventGroups.value[item.eventId.toString()])
 }
 
 // Tutup modal
@@ -197,6 +257,8 @@ const getCategoryIcon = (categoryId: string): string => {
 onMounted(() => {
   // Scroll ke posisi paling atas saat halaman dimuat
   window.scrollTo(0, 0)
+  
+  fetchGallery()
 
   // Log URL gambar untuk debugging
   galleryItems.value.forEach(item => {
@@ -218,10 +280,12 @@ onMounted(() => {
     })
   }, observerOptions)
 
-  // Amati elemen yang akan dianimasikan
-  document.querySelectorAll('.animate-on-scroll, .project-card').forEach((el) => {
-    observer.observe(el)
-  })
+  setTimeout(() => {
+     // Amati elemen yang akan dianimasikan
+    document.querySelectorAll('.animate-on-scroll, .project-card').forEach((el) => {
+        observer.observe(el)
+    })
+  }, 100)
 })
 
 const handleImageError = (event: Event) => {
@@ -243,8 +307,6 @@ const getSafeImageUrl = (url: string): string => {
     return 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=60';
   }
 }
-
-
 </script>
 
 <template>

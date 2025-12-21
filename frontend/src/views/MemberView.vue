@@ -102,7 +102,7 @@
         </div>
 
         <!-- Member List -->
-        <section v-else class="member-grid-section animate-on-scroll">
+        <section v-else class="member-grid-section">
           <!-- Empty State -->
           <div v-if="filteredMembers.length === 0" class="empty-state">
             <div class="empty-icon">👨‍🎓</div>
@@ -294,14 +294,14 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, watch, nextTick } from 'vue'
 import axios from 'axios'
-import membersData from '@/data/members.json'
+// import membersData from '@/data/members.json' // REMOVED: Dependency on JSON file
 
 // @ts-ignore
 const isDev = process.env.NODE_ENV === 'development'
 
 // Interface untuk data anggota
 interface Member {
-  id: number
+  id: string // Changed to string for MongoDB _id
   nama: string
   nim: string
   angkatan: string
@@ -348,92 +348,118 @@ const getFotoPosition = (nim: string): string => {
   return fotoPosConfig[nim] || fotoPosConfig['default']
 }
 
+// Status mapping helper
+const mapStatus = (item: any) => {
+  // Prioritize converting inactive members to 'lulus' based on user feedback
+  if (item.membership?.isActive === false) return 'lulus' 
+  if (item.membership?.membershipType === 'alumni') return 'lulus'
+  if (item.membership?.membershipType === 'honorary') return 'kehormatan'
+  return 'aktif'
+}
+
 // Fetch data
 const fetchMembers = async () => {
   try {
     loading.value = true
+    error.value = '' // Reset error state
 
-    // Dalam mode development, gunakan data dummy
-    if (isDev) {
-      console.log('Development mode: menggunakan data dummy')
-      useDummyData()
-      return
-    }
+    // Always fetch from API
+    const response = await axios.get('/api/members')
+    
+    // Backend returns: { success: true, count: N, data: [...] }
+    const backendData = response.data.data || (Array.isArray(response.data) ? response.data : [])
+    
+    console.log(`Loaded ${backendData.length} members from API`) // Debug log
 
-    // Dalam production, coba ambil dari API
-    try {
-      const response = await axios.get('/api/members')
-      if (response.data && Array.isArray(response.data)) {
-        membersList.value = response.data
-      } else if (response.data && Array.isArray(response.data.data)) {
-        membersList.value = response.data.data
-      } else {
-        console.warn('Format data dari server tidak sesuai, menggunakan data dummy')
-        useDummyData()
-      }
-    } catch (err) {
-      console.warn('Error fetching data dari API, menggunakan data dummy:', err)
-      useDummyData()
-    }
-
-    loading.value = false
-  } catch (err) {
-    error.value = 'Gagal memuat data anggota'
-    loading.value = false
-    console.error('Error fatal:', err)
-    membersList.value = []
-  }
-}
-
-// Fungsi untuk memuat data dummy
-const useDummyData = () => {
-  console.log('Loading dummy data...')
-  try {
-    // Debug data
-    console.log('Data members yang diimpor:', membersData)
-
-    // Cek apakah data memiliki properti membersList
-    if (membersData && Array.isArray(membersData.membersList)) {
-      membersList.value = membersData.membersList.map((member) => ({
-        ...member,
-        fotoPos: getFotoPosition(member.nim),
-        status: member.status || 'aktif',
+    if (Array.isArray(backendData)) {
+      // Map backend data (Mongoose) to frontend structure
+      membersList.value = backendData.map((item: any) => ({
+        id: item._id,
+        nama: item.name,
+        nim: item.studentId,
+        angkatan: item.batch,
+        email: item.email,
+        foto: item.photo || 'https://via.placeholder.com/150', // Fallback image
+        status: mapStatus(item), // Use refined mapping
+        jenisKelamin: '-', 
+        // Social Media
+        instagram: item.socialMedia?.instagram || '',
+        linkedin: item.socialMedia?.linkedin || '',
+        github: item.socialMedia?.github || '',
+        // Opsional
+        deskripsi: '', 
+        prestasi: [], 
+        keahlian: [], 
+        kontak: item.phoneNumber,
+        fotoPos: getFotoPosition(item.studentId)
       }))
-    } else {
-      // Fallback jika data tidak sesuai format yang diharapkan
-      console.error('Format data members.json tidak sesuai:', membersData)
-      membersList.value = []
-      error.value = 'Data tidak tersedia dalam format yang benar'
-    }
-  } catch (err) {
-    console.error('Error saat memproses data members:', err)
-    membersList.value = []
-    error.value = 'Error saat memproses data anggota'
-  }
 
-  loading.value = false
+      // Re-trigger animation observer after DOM update
+      nextTick(() => {
+        const observerOptions = {
+          threshold: 0.1,
+          rootMargin: '0px 0px -100px 0px',
+        }
+        const observer = new IntersectionObserver((entries) => {
+          entries.forEach((entry) => {
+            if (entry.isIntersecting) {
+              entry.target.classList.add('animate-in')
+              observer.unobserve(entry.target)
+            }
+          })
+        }, observerOptions)
+        
+        document.querySelectorAll('.animate-on-scroll').forEach((el) => {
+          observer.observe(el)
+        })
+      })
+
+    } else {
+      console.warn('Format data dari server tidak sesuai')
+      error.value = 'Format data tidak valid'
+    }
+
+  } catch (err) {
+    console.error('Error fetching data dari API:', err)
+    error.value = 'Gagal memuat data anggota. Pastikan server berjalan.'
+    membersList.value = []
+  } finally {
+    loading.value = false
+  }
 }
+
+// REMOVED: useDummyData function
 
 // Computed untuk filtering
 const filteredMembers = computed(() => {
   if (!Array.isArray(membersList.value)) {
-    console.error('membersList.value bukan array')
     return []
   }
 
   const searchLower = searchQuery.value.toLowerCase()
+  const fStatus = filterStatus.value.toLowerCase()
+  const fAngkatan = filterAngkatan.value
 
   return membersList.value.filter((member) => {
     if (!member) return false
 
+    // Safe string conversion for filtering
+    const name = String(member.nama || '').toLowerCase()
+    const nim = String(member.nim || '').toLowerCase()
+    const angkatan = String(member.angkatan || '').toLowerCase()
+    const status = String(member.status || '').toLowerCase()
+
     const matchesSearch =
       searchLower === '' ||
-      (member.nama && member.nama.toLowerCase().includes(searchLower)) ||
-      (member.nim && member.nim.toLowerCase().includes(searchLower)) ||
-      (member.angkatan && member.angkatan.toLowerCase().includes(searchLower))
+      name.includes(searchLower) ||
+      nim.includes(searchLower) ||
+      angkatan.includes(searchLower)
 
-    const matchesAngkatan = filterAngkatan.value === '' || member.angkatan === filterAngkatan.value
-    const matchesStatus = filterStatus.value === '' || member.status === filterStatus.value
+    // Exact match for Angkatan and Status
+    const matchesAngkatan = fAngkatan === '' || angkatan === fAngkatan.toLowerCase()
+    
+    // Flexible status matching (handle 'tidak aktif' vs 'lulus' overlaps if needed)
+    const matchesStatus = fStatus === '' || status === fStatus
 
     return matchesSearch && matchesAngkatan && matchesStatus
   })

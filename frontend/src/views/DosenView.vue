@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import dosenData from '@/data/dosen.json'
+import axios from 'axios'
+// import dosenData from '@/data/dosen.json' // Removed
 
 // Interface untuk data dosen
 interface DosenItem {
-  id: number
+  id: string // Changed to string for MongoDB _id
   name: string
   specialization: string
   email: string
@@ -19,14 +20,28 @@ interface ExpertiseField {
   count?: number
 }
 
-// Data bidang keahlian dari file JSON
-const expertiseFields = ref<ExpertiseField[]>(dosenData.expertiseFields)
+// Data bidang keahlian (Static definition)
+const expertiseFields = ref<ExpertiseField[]>([
+  { id: 'all', name: 'Semua Bidang', count: 0 },
+  { id: 'software', name: 'RPL', count: 0 },
+  { id: 'ai', name: 'Kecerdasan Buatan', count: 0 },
+  { id: 'multimedia', name: 'Multimedia', count: 0 },
+  { id: 'network', name: 'Jarkom & Keamanan', count: 0 },
+  { id: 'database', name: 'Basis Data', count: 0 }
+])
 
-// Data dosen dari file JSON
-const originalDosenItems = ref<DosenItem[]>(dosenData.dosenItems)
+// Data dosen
+const originalDosenItems = ref<DosenItem[]>([])
+const loading = ref(true)
+const error = ref('')
 
-// Stats untuk dosen dari file JSON
-const dosenStats = ref(dosenData.dosenStats)
+// Stats untuk dosen (Placeholder / Derived)
+const dosenStats = computed(() => [
+  { id: 1, number: originalDosenItems.value.length, label: 'Total Dosen' },
+  { id: 2, number: originalDosenItems.value.filter(d => d.bidang === 'ai').length, label: 'Ahli AI' },
+  { id: 3, number: originalDosenItems.value.filter(d => d.bidang === 'software').length, label: 'Ahli Software' },
+  { id: 4, number: originalDosenItems.value.filter(d => d.bidang === 'network').length, label: 'Ahli Jaringan' },
+])
 
 // State untuk aktif bidang
 const activeBidang = ref('all')
@@ -171,11 +186,34 @@ const updateExpertiseFieldCounts = () => {
   })
 }
 
-onMounted(() => {
-  console.log('Dosen page mounted, items:', filteredDosen.value.length)
+const fetchLecturers = async () => {
+  try {
+    loading.value = true
+    const response = await axios.get('/api/lecturers')
+    const backendData = response.data.data ? response.data.data : response.data
+    
+    if (Array.isArray(backendData)) {
+      originalDosenItems.value = backendData.map((item: any) => ({
+        id: item._id, // Use MongoDB _id
+        name: item.name,
+        specialization: item.specialization,
+        email: item.email,
+        nidn: item.nip,
+        bidang: item.expertise || 'other',
+        imageUrl: item.photo
+      }))
+      updateExpertiseFieldCounts()
+    }
+  } catch (err) {
+    console.error('Error fetching lecturers:', err)
+    error.value = 'Gagal memuat data dosen'
+  } finally {
+    loading.value = false
+  }
+}
 
-  // Update expertise field counts
-  updateExpertiseFieldCounts()
+onMounted(() => {
+  fetchLecturers()
 
   // Animasi scroll untuk elemen-elemen pada halaman
   const observerOptions = {
@@ -199,6 +237,7 @@ onMounted(() => {
     })
   }, 100)
 })
+
 </script>
 
 <template>

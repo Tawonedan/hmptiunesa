@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import eventsData from '@/data/events.json'
+import axios from 'axios'
 
 // Mendefinisikan interface
 interface EventItem {
-  id: number
+  id: string
   title: string
   category: string
   description: string
@@ -22,10 +22,10 @@ interface EventItem {
     total: number
   }
   speaker?: string
-  level?: 'Pemula' | 'Menengah' | 'Mahir' | 'Semua Level'
-  htm?: string // Format: "Rp XX.XXX (Internal) / Rp XX.XXX (Eksternal)"
-  htm_note?: string // Format: "*Internal: Prodi TI, SI, PTI, dan MI"
-  formUrl?: string // URL Google Form untuk pendaftaran
+  level?: string
+  htm?: string 
+  htm_note?: string
+  formUrl?: string 
   contacts?: {
     phone: string
     name: string
@@ -34,9 +34,6 @@ interface EventItem {
 
 const route = useRoute()
 const router = useRouter()
-
-// Data dari file JSON
-const eventList = ref<EventItem[]>(eventsData.eventItems as EventItem[])
 
 // State untuk menyimpan detail kegiatan
 const event = ref<EventItem | null>(null)
@@ -53,7 +50,7 @@ const isZoomed = ref(false)
 const cursorPosition = ref({ x: 0.5, y: 0.5 }) // Default ke tengah
 
 // Computed untuk mendapatkan event ID dari parameter route
-const eventId = computed(() => Number(route.params.id))
+const eventId = computed(() => route.params.id as string)
 
 // Format nomor telepon untuk WhatsApp link
 const formatWhatsAppLink = (phoneNumber: string): string => {
@@ -132,26 +129,46 @@ const followCursor = (event: MouseEvent) => {
 }
 
 // Ambil data kegiatan berdasarkan ID
-const fetchEventDetail = () => {
+const fetchEventDetail = async () => {
   loading.value = true
   error.value = ''
 
   try {
-    // Cari kegiatan berdasarkan ID
-    const foundEvent = eventList.value.find((e) => e.id === eventId.value)
+    const response = await axios.get(`/api/events/${eventId.value}`)
+    const data = response.data
 
-    if (foundEvent) {
-      event.value = foundEvent
+    if (data) {
+        event.value = {
+            id: data._id,
+            title: data.title,
+            category: data.category,
+            description: data.description,
+            location: data.location,
+            time: data.time,
+            date: data.date, // Assumes backend returns { day, month, year } object directly as per schema
+            imageUrl: data.thumbnail || data.imageUrl || '', 
+            slots: {
+                registered: data.slots?.registered || 0,
+                total: data.slots?.total || data.capacity || 0
+            },
+            speaker: data.speaker,
+            level: data.level,
+            htm: data.htm,
+            htm_note: data.htm_note, // Assuming backend has this or similar
+            formUrl: data.formUrl,
+            contacts: data.contacts
+        }
     } else {
-      error.value = 'Kegiatan tidak ditemukan'
-      // Redirect ke halaman kegiatan jika event tidak ditemukan
-      setTimeout(() => {
-        router.push('/kegiatan')
-      }, 3000)
+        throw new Error('Data empty')
     }
+
   } catch (err) {
-    error.value = 'Terjadi kesalahan saat memuat data kegiatan'
+    error.value = 'Kegiatan tidak ditemukan atau terjadi kesalahan'
     console.error('Error fetching event details:', err)
+    // Redirect ke halaman kegiatan jika event tidak ditemukan
+    setTimeout(() => {
+      router.push('/kegiatan')
+    }, 3000)
   } finally {
     loading.value = false
   }
@@ -172,18 +189,8 @@ const attendanceStats = ref([{ id: 3, label: 'Hari Tersisa', value: 0 }])
 // Helper function untuk mengkonversi nama bulan menjadi nomor bulan (0-11)
 const getMonthNumber = (monthName: string): number => {
   const months: { [key: string]: number } = {
-    Jan: 0,
-    Feb: 1,
-    Mar: 2,
-    Apr: 3,
-    Mei: 4,
-    Jun: 5,
-    Jul: 6,
-    Ags: 7,
-    Sep: 8,
-    Okt: 9,
-    Nov: 10,
-    Des: 11,
+    Jan: 0, Feb: 1, Mar: 2, Apr: 3, Mei: 4, Jun: 5,
+    Jul: 6, Ags: 7, Sep: 8, Okt: 9, Nov: 10, Des: 11,
   }
   return months[monthName] || 0
 }
@@ -197,14 +204,12 @@ const fetchServerTime = async () => {
 
     // Parse datetime string menjadi objek Date
     serverDate.value = new Date(data.datetime)
-    console.log('Server time:', serverDate.value)
-
+    
     // Update statistik setelah mendapatkan waktu server
     updateStats()
   } catch (error) {
     console.error('Error fetching server time:', error)
     // Fallback ke waktu lokal jika gagal
-    console.log('Using local time as fallback')
     serverDate.value = new Date()
     updateStats()
   }

@@ -9,14 +9,14 @@ async function seedGallery() {
   try {
     // Koneksi ke database
     await connectDB();
-    
+
     // Hapus semua data gallery yang ada
     await GalleryItem.deleteMany({});
     console.log('Data galeri yang ada telah dihapus');
-    
+
     // Cari atau buat user admin untuk uploadedBy
     let adminUser = await User.findOne({ role: 'admin' });
-    
+
     if (!adminUser) {
       adminUser = await User.create({
         nama: 'Admin HMP',
@@ -27,11 +27,11 @@ async function seedGallery() {
       });
       console.log('User admin dibuat untuk seed');
     }
-    
+
     // Baca file gallery.json
     const galleryDataPath = path.join(__dirname, '../../frontend/src/data/gallery.json');
     const data = JSON.parse(fs.readFileSync(galleryDataPath, 'utf8'));
-    
+
     // Mapping kategori frontend ke type di backend
     const typeMapping = {
       'events': 'image',
@@ -39,23 +39,23 @@ async function seedGallery() {
       'competitions': 'image',
       'gatherings': 'image'
     };
-    
-    const galleryItems = data.galleryItems.map(item => {
+
+    const galleryItems = (Array.isArray(data) ? data : (data.galleryItems || [])).map(item => {
       // Parse tanggal dari format string
       const dateParts = item.date.split(' ');
       const day = parseInt(dateParts[0]);
-      
+
       // Mapping bulan bahasa Indonesia ke angka
       const monthMap = {
         'Januari': 0, 'Februari': 1, 'Maret': 2, 'April': 3, 'Mei': 4, 'Juni': 5,
         'Juli': 6, 'Agustus': 7, 'September': 8, 'Oktober': 9, 'November': 10, 'Desember': 11
       };
-      
+
       const month = monthMap[dateParts[1]] || 0;
       const year = parseInt(dateParts[2]);
-      
+
       const itemDate = new Date(year, month, day);
-      
+
       // Buat object dasar
       const galleryItem = {
         title: item.title,
@@ -78,21 +78,21 @@ async function seedGallery() {
         featured: item.id <= 5, // 5 items pertama featured
         uploadedBy: adminUser._id
       };
-      
+
       // Hapus referensi event karena perlu ObjectId yang valid
       // Jika perlu, bisa ditambahkan kembali setelah mendapatkan ID event yang valid dari database
-      
+
       return galleryItem;
     });
-    
+
     // Menyimpan data ke database
     const result = await GalleryItem.insertMany(galleryItems);
     console.log(`${result.length} item galeri berhasil ditambahkan ke database`);
-    
+
     // Menutup koneksi
     await mongoose.connection.close();
     console.log('Koneksi ditutup. Seeding data galeri selesai!');
-    
+
   } catch (error) {
     console.error('Error saat seeding galeri:', error);
     process.exit(1);

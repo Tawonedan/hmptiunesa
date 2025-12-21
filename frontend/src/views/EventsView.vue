@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import eventsData from '@/data/events.json'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import axios from 'axios'
+// import eventsData from '@/data/events.json' // Removed
 
 // Interface untuk data kegiatan
 interface EventItem {
-  id: number
+  id: string // Changed to string for MongoDB _id
   title: string
   category: string
   description: string
@@ -36,14 +37,34 @@ interface Category {
   icon?: string
 }
 
-// Data kategori dari file JSON
-const categories = ref<Category[]>(eventsData.categories)
+// Data kategori (Static)
+const categories = ref<Category[]>([
+  { id: 'all', name: 'Semua', icon: '📋' },
+  { id: 'seminar', name: 'Seminar', icon: '🎤' },
+  { id: 'webinar', name: 'Webinar', icon: '💻' },
+  { id: 'workshop', name: 'Workshop', icon: '🛠️' },
+  { id: 'training', name: 'Training', icon: '📚' },
+  { id: 'competition', name: 'Lomba', icon: '🏆' },
+  { id: 'other', name: 'Lainnya', icon: '🎉' }
+])
 
-// Data kegiatan dari file JSON
-const originalEventItems = ref<EventItem[]>(eventsData.eventItems)
+// Data kegiatan
+const originalEventItems = ref<EventItem[]>([])
+const loading = ref(true)
+const error = ref('')
 
-// Stats untuk kegiatan dari file JSON
-const eventStats = ref(eventsData.eventStats)
+// Stats untuk kegiatan (Derived)
+const eventStats = computed(() => [
+  { id: 1, number: originalEventItems.value.length, label: 'Total Kegiatan' },
+  { id: 2, number: originalEventItems.value.filter(e => {
+    const eventDate = new Date(parseInt(e.date.year), getMonthNumber(e.date.month), parseInt(e.date.day));
+    const now = new Date();
+    now.setHours(0, 0, 0, 0); // Normalize 'now' to start of day for comparison
+    return eventDate >= now;
+  }).length, label: 'Akan Datang' },
+  { id: 3, number: originalEventItems.value.filter(e => e.category === 'workshop' || e.category === 'training').length, label: 'Pelatihan' },
+  { id: 4, number: originalEventItems.value.reduce((acc, curr) => acc + (curr.slots?.registered || 0), 0), label: 'Total Peserta' }
+])
 
 // State untuk aktif kategori
 const activeCategory = ref('all')
@@ -87,7 +108,7 @@ const paginatedEvents = computed(() => {
 
 // Computed total halaman
 const totalPages = computed(() => {
-  return Math.ceil(filteredEvents.value.length / itemsPerPage.value)
+  return Math.max(1, Math.ceil(filteredEvents.value.length / itemsPerPage.value))
 })
 
 // Fungsi untuk mengganti halaman dan scroll ke posisi yang tepat
@@ -167,27 +188,22 @@ const resetFilters = () => {
 // Helper function untuk mengkonversi nama bulan menjadi nomor bulan (0-11)
 const getMonthNumber = (monthName: string): number => {
   const months: { [key: string]: number } = {
-    Jan: 0,
-    Feb: 1,
-    Mar: 2,
-    Apr: 3,
-    Mei: 4,
-    Jun: 5,
-    Jul: 6,
-    Ags: 7,
-    Sep: 8,
-    Okt: 9,
-    Nov: 10,
-    Des: 11,
+    Jan: 0, Feb: 1, Mar: 2, Apr: 3, Mei: 4, Jun: 5,
+    Jul: 6, Ags: 7, Sep: 8, Okt: 9, Nov: 10, Des: 11,
   }
   return months[monthName] || 0
+}
+
+const getMonthName = (monthIndex: number): string => {
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Ags', 'Sep', 'Okt', 'Nov', 'Des']
+  return months[monthIndex] || 'Jan'
 }
 
 // Data countdown event mendatang
 const upcomingEvent = ref({
   title: '',
   imageUrl: '',
-  id: 0,
+  id: '',
   formUrl: '',
   countdown: {
     days: 0,
@@ -201,7 +217,7 @@ const upcomingEvent = ref({
 let countdownInterval: ReturnType<typeof setInterval> | null = null
 
 // Fungsi untuk mendapatkan event berdasarkan ID
-const findEventById = (id: number): EventItem | undefined => {
+const findEventById = (id: string): EventItem | undefined => {
   return originalEventItems.value.find((event) => event.id === id)
 }
 
@@ -218,19 +234,19 @@ const findNextUpcomingEvent = (): EventItem | null => {
     const eventMonth = getMonthNumber(event.date.month)
     const eventYear = parseInt(event.date.year)
 
-    // Ambil waktu dari string waktu event
-    let timeString = event.time.split(' ')[0] // Default ambil bagian pertama
+    // Ambil waktu dari string waktu event (e.g., "07:00")
+    // Assuming backend returns standard time string or we format it.
+    // If backend returns "07:00", strict splitting is fine.
+
+    let timeString = event.time || '00:00'
     let eventHours = 0
     let eventMinutes = 0
 
-    // Cek jika formatnya "07:00 - Selesai WIB" atau "07:00 s/d Selesai WIB"
-    if (event.time.toLowerCase().includes('selesai')) {
-      // Jika acara sampai selesai, gunakan waktu mulai acara untuk countdown
-      timeString = event.time.split(/\s*[-s/d]\s*/)[0].trim()
-      ;[eventHours, eventMinutes] = timeString.split(':').map((num) => parseInt(num))
-    } else {
-      // Jika ada waktu spesifik
-      ;[eventHours, eventMinutes] = timeString.split(':').map((num) => parseInt(num))
+    // Cek jika formatnya "07:00 - Selesai WIB" atau similar
+    const timeMatch = timeString.match(/(\d{1,2}):(\d{2})/)
+    if (timeMatch) {
+       eventHours = parseInt(timeMatch[1])
+       eventMinutes = parseInt(timeMatch[2])
     }
 
     // Buat objek Date dari tanggal dan waktu event
@@ -258,7 +274,7 @@ const updateCountdown = () => {
     upcomingEvent.value = {
       title: 'Tidak ada event mendatang',
       imageUrl: 'https://picsum.photos/id/239/600/300',
-      id: 0,
+      id: '',
       formUrl: '',
       countdown: { days: 0, hours: 0, minutes: 0, seconds: 0 },
     }
@@ -278,18 +294,14 @@ const updateCountdown = () => {
   const eventYear = parseInt(nextEvent.date.year)
 
   // Ambil waktu dari string waktu event
-  let timeString = nextEvent.time.split(' ')[0] // Default ambil bagian pertama
+  let timeString = nextEvent.time || '00:00'
   let eventHours = 0
   let eventMinutes = 0
 
-  // Cek jika formatnya "07:00 - Selesai WIB" atau "07:00 s/d Selesai WIB"
-  if (nextEvent.time.toLowerCase().includes('selesai')) {
-    // Jika acara sampai selesai, gunakan waktu mulai acara untuk countdown
-    timeString = nextEvent.time.split(/\s*[-s/d]\s*/)[0].trim()
-    ;[eventHours, eventMinutes] = timeString.split(':').map((num) => parseInt(num))
-  } else {
-    // Jika ada waktu spesifik
-    ;[eventHours, eventMinutes] = timeString.split(':').map((num) => parseInt(num))
+  const timeMatch = timeString.match(/(\d{1,2}):(\d{2})/)
+  if (timeMatch) {
+     eventHours = parseInt(timeMatch[1])
+     eventMinutes = parseInt(timeMatch[2])
   }
 
   // Buat objek Date dari tanggal dan waktu event
@@ -328,12 +340,9 @@ const reminderLoading = ref(false)
 // Fungsi untuk membuka modal reminder
 const openReminderModal = () => {
   isReminderModalOpen.value = true
-  // Reset state
   reminderEmail.value = ''
   reminderSuccess.value = false
   reminderLoading.value = false
-
-  // Reset opsi reminder
   reminderOptions.value = {
     email: true,
     browser: false,
@@ -348,32 +357,67 @@ const closeReminderModal = () => {
 
 // Fungsi untuk submit form reminder
 const submitReminder = () => {
-  // Validasi email sederhana
   if (!reminderEmail.value || !reminderEmail.value.includes('@')) {
     alert('Mohon masukkan alamat email yang valid')
     return
   }
 
-  // Simulasi loading
   reminderLoading.value = true
 
-  // Simulasi request ke backend (timeout)
   setTimeout(() => {
     reminderLoading.value = false
     reminderSuccess.value = true
-
-    // Tutup modal setelah beberapa detik
     setTimeout(() => {
       closeReminderModal()
     }, 3000)
   }, 1500)
 }
 
-onMounted(() => {
-  // Scroll ke posisi paling atas saat halaman dimuat
-  window.scrollTo(0, 0)
+const fetchEvents = async () => {
+    try {
+        loading.value = true
+        // Fetch a larger number of events to support client-side filtering/pagination
+        const response = await axios.get('/api/events', { params: { limit: 100 } })
+        
+        // Handle structure from eventController: { events: [...], ... }
+        const backendEvents = response.data.events || (Array.isArray(response.data) ? response.data : [])
 
-  console.log('Events page mounted, items:', filteredEvents.value.length)
+        if (Array.isArray(backendEvents)) {
+            originalEventItems.value = backendEvents.map((item: any) => {
+                return {
+                    id: item._id,
+                    title: item.title,
+                    category: item.category,
+                    description: item.description,
+                    location: item.location,
+                    time: item.time,
+                    // Backend directly returns formatted date { day, month, year }
+                    date: item.date,
+                    imageUrl: item.thumbnail || '',
+                    slots: {
+                        registered: item.slots?.registered || 0,
+                        total: item.slots?.total || item.capacity || 0
+                    },
+                    speaker: item.speaker,
+                    level: item.level,
+                    htm: item.htm,
+                    formUrl: item.formUrl,
+                    contacts: item.contacts
+                }
+            })
+            updateCountdown()
+        }
+    } catch (err) {
+        console.error('Error fetching events:', err)
+        error.value = 'Gagal memuat data kegiatan'
+    } finally {
+        loading.value = false
+    }
+}
+
+onMounted(() => {
+  window.scrollTo(0, 0)
+  fetchEvents()
 
   // Inisialisasi dan mulai countdown
   updateCountdown()
@@ -381,7 +425,7 @@ onMounted(() => {
   // Update countdown setiap detik
   countdownInterval = setInterval(updateCountdown, 1000)
 
-  // Animasi scroll untuk elemen-elemen pada halaman
+  // Animasi scroll
   const observerOptions = {
     threshold: 0.1,
     rootMargin: '0px 0px -100px 0px',
@@ -396,20 +440,21 @@ onMounted(() => {
     })
   }, observerOptions)
 
-  // Amati elemen yang akan dianimasikan
-  document.querySelectorAll('.animate-on-scroll').forEach((el) => {
-    observer.observe(el)
-  })
+  setTimeout(() => {
+    document.querySelectorAll('.animate-on-scroll').forEach((el) => {
+        observer.observe(el)
+    })
+  }, 100)
 })
 
-// Bersihkan interval saat komponen di-unmount
-const beforeUnmount = () => {
+onBeforeUnmount(() => {
   if (countdownInterval !== null) {
     clearInterval(countdownInterval)
     countdownInterval = null
   }
-}
+})
 </script>
+
 
 <template>
   <div class="events-container">

@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
-import projectsData from '@/data/projects.json'
+import axios from 'axios'
 
 interface Project {
-  id: number
+  id: string
   title: string
   description: string
   image: string
@@ -17,11 +17,13 @@ interface Project {
   benefits?: string[]
 }
 
-// Data proyek dari file JSON
-const projects = ref<Project[]>(projectsData.projectItems)
+// Data proyek
+const projects = ref<Project[]>([])
+const loading = ref(true)
+const error = ref('')
 
 // Filter dan state
-const categories = ref<string[]>(projectsData.categories)
+const categories = ref<string[]>(['All', 'Web App', 'Mobile App', 'IoT', 'AI', 'Event Management'])
 const selectedCategory = ref('All')
 const searchQuery = ref('')
 const selectedProject = ref<Project | null>(null)
@@ -84,6 +86,41 @@ const handleFileUpload = (event: Event, type: 'main' | 'detail') => {
 
 // State untuk menampilkan pesan sukses
 const submissionSuccess = ref(false)
+
+// Fetch projects from API
+const fetchProjects = async () => {
+  try {
+    loading.value = true
+    const response = await axios.get('/api/projects', { params: { limit: 100 } })
+    
+    // Check structure based on projectController: { data: [...] }
+    const backendData = response.data.data ? response.data.data : (Array.isArray(response.data) ? response.data : [])
+    
+    if (Array.isArray(backendData)) {
+      projects.value = backendData.map((item: any) => {
+        return {
+          id: item._id,
+          title: item.title,
+          description: item.description,
+          image: item.thumbnail || '',
+          detailImage: (item.images && item.images.length > 0) ? item.images[0] : (item.thumbnail || ''),
+          category: item.category,
+          tags: item.technologies || [],
+          year: new Date(item.startDate).getFullYear().toString(),
+          team: Array.isArray(item.team) ? item.team.map((m: any) => m.name) : [],
+          link: item.links?.website,
+          github: item.links?.github,
+          benefits: [] // Schema doesn't support benefits yet
+        }
+      })
+    }
+  } catch (err) {
+    console.error('Error fetching projects:', err)
+    error.value = 'Gagal memuat data proyek'
+  } finally {
+    loading.value = false
+  }
+}
 
 // Computed untuk proyek yang difilter
 const filteredProjects = computed(() => {
@@ -226,7 +263,7 @@ const submitProject = () => {
   }
 
   const projectToSubmit = {
-    id: projects.value.length + 1, // Sederhananya, ID baru adalah panjang array + 1
+    id: (projects.value.length + 1).toString(), // Changed to string to match interface
     title: newProject.value.title,
     description: newProject.value.description,
     category: newProject.value.category,
@@ -292,6 +329,8 @@ const closeSubmitForm = () => {
 onMounted(() => {
   // Scroll ke posisi paling atas saat halaman dimuat
   window.scrollTo(0, 0)
+  
+  fetchProjects()
 
   // Animasi scroll untuk elemen-elemen pada halaman
   const observerOptions = {
@@ -308,10 +347,12 @@ onMounted(() => {
     })
   }, observerOptions)
 
-  // Amati elemen yang akan dianimasikan
-  document.querySelectorAll('.animate-on-scroll').forEach((el) => {
-    observer.observe(el)
-  })
+  setTimeout(() => {
+    // Amati elemen yang akan dianimasikan
+    document.querySelectorAll('.animate-on-scroll').forEach((el) => {
+        observer.observe(el)
+    })
+  }, 100)
 })
 </script>
 

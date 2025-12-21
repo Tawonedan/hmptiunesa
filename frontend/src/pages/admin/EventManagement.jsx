@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import eventsData from '../../data/events.json';
+// import eventsData from '../../data/events.json'; // TODO: Refactor to use API or remove if unused
 
 export default function EventManagement() {
   const [events, setEvents] = useState([]);
@@ -8,7 +8,7 @@ export default function EventManagement() {
   const [isFormVisible, setIsFormVisible] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filter, setFilter] = useState('all');
-  
+
   // Form state for events
   const [formData, setFormData] = useState({
     id: '',
@@ -50,8 +50,8 @@ export default function EventManagement() {
     // Filter and search
     const filtered = events.filter(item => {
       const matchesSearch = item.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                            item.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                            item.location.toLowerCase().includes(searchTerm.toLowerCase());
+        item.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        item.location.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesFilter = filter === 'all' || item.category === filter;
       return matchesSearch && matchesFilter;
     });
@@ -110,7 +110,7 @@ export default function EventManagement() {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    
+
     if (name.includes('.')) {
       const [parent, child] = name.split('.');
       setFormData({
@@ -158,10 +158,10 @@ export default function EventManagement() {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    
+
     if (selectedEvent) {
       // Update existing event
-      const updatedEvents = events.map(item => 
+      const updatedEvents = events.map(item =>
         item.id === selectedEvent.id ? formData : item
       );
       setEvents(updatedEvents);
@@ -169,7 +169,7 @@ export default function EventManagement() {
       // Add new event
       setEvents([...events, formData]);
     }
-    
+
     setIsFormVisible(false);
     // In production, make API call to update the backend
   };
@@ -272,7 +272,7 @@ export default function EventManagement() {
             <h3 className="text-xl font-bold mb-4">
               {selectedEvent ? 'Edit Data Kegiatan' : 'Tambah Kegiatan Baru'}
             </h3>
-            
+
             <form onSubmit={handleSubmit}>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                 <div>

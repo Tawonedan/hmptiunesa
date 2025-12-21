@@ -1,4 +1,5 @@
 const User = require('../models/User');
+const Member = require('../models/Member');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
 
@@ -6,19 +7,30 @@ const bcrypt = require('bcrypt');
 exports.register = async (req, res) => {
   try {
     const { nama, email, password, nim } = req.body;
-    
-    // Cek apakah email sudah terdaftar
+
+    // 1. Validasi: Cek apakah NIM ada di database Member (Validasi Keanggotaan)
+    const memberExists = await Member.findOne({ studentId: nim });
+    if (!memberExists) {
+      return res.status(400).json({
+        message: 'NIM tidak ditemukan dalam database anggota. Silakan hubungi admin.'
+      });
+    }
+
+    // 2. Validasi: Cek apakah nama sesuai (Opsional, untuk keamanan tambahan)
+    // if (memberExists.name.toLowerCase() !== nama.toLowerCase()) { ... }
+
+    // 3. Cek apakah email sudah terdaftar sebagai User
     let user = await User.findOne({ email });
     if (user) {
       return res.status(400).json({ message: 'Email sudah terdaftar' });
     }
-    
-    // Cek apakah NIM sudah terdaftar
+
+    // 4. Cek apakah NIM sudah terdaftar sebagai User (Akun sudah dibuat)
     user = await User.findOne({ nim });
     if (user) {
-      return res.status(400).json({ message: 'NIM sudah terdaftar' });
+      return res.status(400).json({ message: 'Akun untuk NIM ini sudah ada' });
     }
-    
+
     // Buat user baru
     user = new User({
       nama,
@@ -27,20 +39,20 @@ exports.register = async (req, res) => {
       nim,
       role: 'anggota' // Default role
     });
-    
+
     // Hash password
     const salt = await bcrypt.genSalt(10);
     user.password = await bcrypt.hash(password, salt);
-    
+
     // Simpan user
     await user.save();
-    
+
     // Buat JWT token
     const payload = {
       id: user.id,
       role: user.role
     };
-    
+
     jwt.sign(
       payload,
       process.env.JWT_SECRET,
@@ -59,32 +71,41 @@ exports.register = async (req, res) => {
 exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
-    
+
     // Cek apakah user ada
     const user = await User.findOne({ email });
     if (!user) {
       return res.status(400).json({ message: 'Email atau password salah' });
     }
-    
+
     // Cek password
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
       return res.status(400).json({ message: 'Email atau password salah' });
     }
-    
+
     // Buat JWT token
     const payload = {
       id: user.id,
       role: user.role
     };
-    
+
     jwt.sign(
       payload,
       process.env.JWT_SECRET,
       { expiresIn: '7d' },
       (err, token) => {
         if (err) throw err;
-        res.json({ token });
+        res.json({
+          token,
+          user: {
+            id: user.id,
+            nama: user.nama,
+            email: user.email,
+            role: user.role,
+            nim: user.nim
+          }
+        });
       }
     );
   } catch (error) {
@@ -106,19 +127,19 @@ exports.getCurrentUser = async (req, res) => {
 exports.updateProfile = async (req, res) => {
   try {
     const { nama, email } = req.body;
-    
+
     // Build update object
     const updateFields = {};
     if (nama) updateFields.nama = nama;
     if (email) updateFields.email = email;
-    
+
     // Update user
     const user = await User.findByIdAndUpdate(
       req.user.id,
       { $set: updateFields },
       { new: true, runValidators: true }
     ).select('-password');
-    
+
     res.json(user);
   } catch (error) {
     res.status(500).json({ message: 'Terjadi kesalahan', error: error.message });
@@ -129,23 +150,23 @@ exports.updateProfile = async (req, res) => {
 exports.changePassword = async (req, res) => {
   try {
     const { currentPassword, newPassword } = req.body;
-    
+
     // Ambil user dengan password
     const user = await User.findById(req.user.id);
-    
+
     // Cek password saat ini
     const isMatch = await bcrypt.compare(currentPassword, user.password);
     if (!isMatch) {
       return res.status(400).json({ message: 'Password saat ini salah' });
     }
-    
+
     // Hash password baru
     const salt = await bcrypt.genSalt(10);
     user.password = await bcrypt.hash(newPassword, salt);
-    
+
     // Simpan perubahan
     await user.save();
-    
+
     res.json({ message: 'Password berhasil diubah' });
   } catch (error) {
     res.status(500).json({ message: 'Terjadi kesalahan', error: error.message });
@@ -166,21 +187,21 @@ exports.getAllUsers = async (req, res) => {
 exports.updateUserRole = async (req, res) => {
   try {
     const { role } = req.body;
-    
+
     if (!['admin', 'pengurus', 'anggota'].includes(role)) {
       return res.status(400).json({ message: 'Role tidak valid' });
     }
-    
+
     const user = await User.findByIdAndUpdate(
       req.params.id,
       { role },
       { new: true, runValidators: true }
     ).select('-password');
-    
+
     if (!user) {
       return res.status(404).json({ message: 'User tidak ditemukan' });
     }
-    
+
     res.json(user);
   } catch (error) {
     res.status(500).json({ message: 'Terjadi kesalahan', error: error.message });

@@ -2,14 +2,14 @@
 import { ref, onMounted, computed, watch, nextTick } from 'vue'
 import axios from 'axios'
 import nioImg from '@/assets/kahim/nio.png'
-import fungsionarisData from '@/data/fungsionaris.json'
+// import fungsionarisData from '@/data/fungsionaris.json' // REMOVED: Dependency on JSON file
 
 // @ts-ignore
 const isDev = process.env.NODE_ENV === 'development'
 
 // Interface untuk data fungsionaris
 interface Fungsionaris {
-  id: number
+  id: string // Changed to string for MongoDB _id
   nama: string
   nim: string
   angkatan: string
@@ -89,32 +89,45 @@ const departemenCategories = ref([
 const fetchFungsionaris = async () => {
   try {
     loading.value = true
+    error.value = '' // Reset error
 
-    // Dalam mode development, selalu gunakan dummy data
-    if (isDev) {
-      console.log('Development mode: menggunakan data dummy')
-      useDummyData()
-      return
-    }
-
-    // Dalam production, coba ambil dari API
     try {
-      const response = await axios.get('/api/fungsionaris')
+      // Fetch dari API backend (MongoDB)
+      const response = await axios.get('/api/functionaries') // Adjusted URL to relative path for proxy
 
-      // Pastikan data yang diterima adalah array
-      if (response.data && Array.isArray(response.data)) {
-        fungsionarisList.value = response.data
-      } else if (response.data && Array.isArray(response.data.data)) {
-        // Jika API mengembalikan data dalam format {data: [...]}
-        fungsionarisList.value = response.data.data
+      // Cek struktur response dari backend
+      // Backend mengembalikan: { success: true, count: N, data: [...] }
+      const backendData = response.data.data ? response.data.data : response.data
+
+      if (Array.isArray(backendData)) {
+        // Map data dari backend (MongoDB) ke format frontend
+        fungsionarisList.value = backendData.map((item: any) => ({
+          id: item._id, // Menggunakan _id dari MongoDB sebagai id
+          nama: item.name,
+          nim: item.studentId,
+          angkatan: '2023', // Static or from DB if available
+          jabatan: item.position,
+          departemen: item.department,
+          email: item.email,
+          foto: item.photo || 'https://via.placeholder.com/150',
+          sosmed: item.socialMedia?.linkedin || '',
+          instagram: item.socialMedia?.instagram || '',
+          linkedin: item.socialMedia?.linkedin || '',
+          github: item.socialMedia?.github || '',
+          deskripsi: item.bio,
+          prestasi: [], 
+          keahlian: [], 
+          kontak: item.phoneNumber,
+          fotoPos: getFotoPosition(item.studentId)
+        }))
       } else {
-        // Jika format tidak sesuai, gunakan dummy data
-        console.warn('Format data dari server tidak sesuai, menggunakan data dummy')
-        useDummyData()
+        console.warn('Format data dari server tidak sesuai. Response:', response.data)
+        error.value = 'Format data tidak valid'
+        fungsionarisList.value = []
       }
     } catch (err) {
-      console.warn('Error fetching data dari API, menggunakan data dummy:', err)
-      useDummyData()
+      console.error('Error fetching data dari API:', err)
+      error.value = 'Gagal mengambil data dari server. Pastikan server berjalan.'
     }
 
     loading.value = false
@@ -128,23 +141,7 @@ const fetchFungsionaris = async () => {
   }
 }
 
-// Fungsi untuk memuat data dummy
-const useDummyData = () => {
-  console.log('Loading dummy data...')
-
-  // Memuat data fungsionaris dari file JSON
-  const dummyData = fungsionarisData.fungsionarisList
-
-  // Menambahkan properti fotoPos untuk setiap anggota
-  fungsionarisList.value = dummyData.map((member) => ({
-    ...member,
-    fotoPos: getFotoPosition(member.nim),
-  }))
-
-  // Update kategori counts
-  updateCategoryCounts()
-  loading.value = false
-}
+// REMOVED: useDummyData function
 
 // Computed untuk filtering
 const filteredFungsionaris = computed(() => {

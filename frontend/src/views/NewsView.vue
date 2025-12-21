@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import newsData from '@/data/news.json'
+import axios from 'axios'
 
 const router = useRouter()
 
 // Interface untuk data berita
 interface NewsItem {
-  id: number
+  id: string
   imageUrl: string
   title: string
   category: string
@@ -15,6 +15,8 @@ interface NewsItem {
   description: string
   content?: string
   featured?: boolean
+  publishDate?: Date // For sorting
+  tags?: string[]
 }
 
 interface Category {
@@ -23,29 +25,131 @@ interface Category {
   count: number
 }
 
-// Data kategori dari file JSON
-const categories = ref<Category[]>(newsData.categories)
+// State variables
+const originalNewsItems = ref<NewsItem[]>([])
+const loading = ref(true)
+const error = ref('')
 
-// Data berita untuk ditampilkan dari file JSON
-const originalNewsItems = ref<NewsItem[]>(newsData.newsItems)
+// Computed Categories based on fetched data
+const categories = computed<Category[]>(() => {
+  const categoryMap: Record<string, number> = {}
+  // Initialize standard categories
+  const standardCats = ['announcement', 'article', 'event', 'achievement', 'academic', 'other']
+  standardCats.forEach(c => categoryMap[c] = 0)
 
-// Membuat salinan untuk ditampilkan
-const newsItems = ref<NewsItem[]>([...originalNewsItems.value])
+  originalNewsItems.value.forEach(item => {
+    if (categoryMap[item.category] !== undefined) {
+      categoryMap[item.category]++
+    } else {
+       categoryMap[item.category] = 1
+    }
+  })
 
-// Stats dari file JSON
-const newsStats = ref(newsData.newsStats)
+  // Map to display names (could be moved to a helper or config)
+  const displayNames: Record<string, string> = {
+    'announcement': 'Pengumuman',
+    'article': 'Artikel',
+    'event': 'Kegiatan',
+    'achievement': 'Prestasi',
+    'academic': 'Akademik',
+    'other': 'Lainnya'
+  }
 
-// Recent posts dari file JSON
-const recentPosts = ref(newsData.recentPosts)
+  return Object.keys(categoryMap).map(key => ({
+    id: key,
+    name: displayNames[key] || key.charAt(0).toUpperCase() + key.slice(1),
+    count: categoryMap[key]
+  })).filter(c => c.count > 0 || standardCats.includes(c.id))
+})
 
-// Tags dari file JSON
-const tags = ref(newsData.tags)
+// Stats stats based on fetched data
+const newsStats = computed(() => {
+  const totalArticles = originalNewsItems.value.length
+  const totalCategories = categories.value.filter(c => c.count > 0).length
+  const totalViews = originalNewsItems.value.reduce((acc, curr) => acc + 0, 0) // Backend doesn't send viewCount in list, assume 0 or need update
+
+  return [
+      { id: 1, number: totalArticles.toString(), label: "Artikel Terbit" },
+      { id: 2, number: totalCategories.toString(), label: "Kategori Aktif" },
+      { id: 3, number: "100+", label: "Pembaca Bulanan" } // Dummy for now
+  ]
+})
+
+
+// Recent posts (sorted by date, take top 5)
+const recentPosts = computed(() => {
+    return [...originalNewsItems.value]
+        .sort((a, b) => (b.publishDate?.getTime() || 0) - (a.publishDate?.getTime() || 0))
+        .slice(0, 5)
+})
+
+// Tags (collect unique tags from all news)
+const tags = computed(() => {
+    const allTags = new Set<string>()
+    originalNewsItems.value.forEach(item => {
+        if (item.tags && Array.isArray(item.tags)) {
+            item.tags.forEach(t => allTags.add(t))
+        }
+    })
+    
+    // If no tags found in data, maybe use fallback or just empty
+    if (allTags.size === 0) return ['HIMTI', 'UNESA', 'Teknologi', 'Mahasiswa'] 
+    
+    return Array.from(allTags)
+})
+
 
 // Active category
 const activeCategory = ref('all')
 
 // Search query
 const searchQuery = ref('')
+
+
+// Fetch News Function
+const fetchNews = async () => {
+    try {
+        loading.value = true
+        // Fetch all published news
+        const response = await axios.get('/api/news', { params: { limit: 100, status: 'published' } })
+        
+        const backendData = response.data.news || (Array.isArray(response.data) ? response.data : [])
+        
+        if (Array.isArray(backendData)) {
+            originalNewsItems.value = backendData.map((item: any) => {
+                const pubDate = new Date(item.publishDate)
+                const formattedDate = pubDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })
+                
+                // Fallback image
+                const img = item.thumbnail || item.featuredImage || 'https://picsum.photos/id/1/800/600'
+
+                return {
+                    id: item._id,
+                    imageUrl: img,
+                    title: item.title,
+                    category: item.category,
+                    date: formattedDate,
+                    description: item.summary || item.content.substring(0, 150) + '...',
+                    content: item.content,
+                    featured: false, // We can determine this later if needed
+                    publishDate: pubDate,
+                    tags: item.tags || []
+                }
+            })
+            
+            // Set first item as featured if available
+            if (originalNewsItems.value.length > 0) {
+                 originalNewsItems.value[0].featured = true
+            }
+        }
+    } catch (err) {
+        console.error('Error fetching news:', err)
+        error.value = 'Gagal memuat berita'
+    } finally {
+        loading.value = false
+    }
+}
+
 
 // Filtered news items untuk tampilan
 const filteredNews = computed(() => {
@@ -64,8 +168,9 @@ const filteredNews = computed(() => {
         item.title.toLowerCase().includes(query) || item.description.toLowerCase().includes(query),
     )
   }
-
-  return result
+  
+  // Sort by date desc
+  return result.sort((a, b) => (b.publishDate?.getTime() || 0) - (a.publishDate?.getTime() || 0))
 })
 
 // Function untuk memfilter kategori
@@ -85,21 +190,13 @@ const handleSearch = () => {
 const currentPage = ref(1)
 const itemsPerPage = ref(6)
 
-// Computed untuk item yang ditampilkan berdasarkan paginasi
-const paginatedNews = computed(() => {
-  const startIndex = (currentPage.value - 1) * itemsPerPage.value
-  const endIndex = startIndex + itemsPerPage.value
-  return filteredNews.value.slice(startIndex, endIndex)
-})
-
-// Computed untuk berita tanpa featured articles
-const nonFeaturedNews = computed(() => {
-  return filteredNews.value.filter((item) => !item.featured)
-})
-
-// Computed untuk berita featured
+// Feature splitting
 const featuredNews = computed(() => {
   return filteredNews.value.filter((item) => item.featured)
+})
+
+const nonFeaturedNews = computed(() => {
+  return filteredNews.value.filter((item) => !item.featured)
 })
 
 // Computed untuk paginasi hanya berita non-featured
@@ -111,7 +208,7 @@ const paginatedNonFeaturedNews = computed(() => {
 
 // Computed total halaman (hanya untuk berita non-featured)
 const totalPages = computed(() => {
-  return Math.ceil(nonFeaturedNews.value.length / itemsPerPage.value)
+  return Math.max(1, Math.ceil(nonFeaturedNews.value.length / itemsPerPage.value))
 })
 
 // Method untuk navigasi paginasi
@@ -122,12 +219,13 @@ const goToPage = (page: number) => {
 }
 
 // Method untuk navigasi ke halaman detail berita
-const goToNewsDetail = (itemId: number) => {
+const goToNewsDetail = (itemId: string) => {
   router.push(`/berita/${itemId}`)
 }
 
 onMounted(() => {
-  console.log('News page mounted, items:', filteredNews.value.length)
+  window.scrollTo(0, 0)
+  fetchNews()
 
   // Animasi scroll untuk elemen-elemen pada halaman
   const observerOptions = {
@@ -143,11 +241,13 @@ onMounted(() => {
       }
     })
   }, observerOptions)
-
-  // Amati elemen yang akan dianimasikan
-  document.querySelectorAll('.animate-on-scroll').forEach((el) => {
-    observer.observe(el)
-  })
+  
+  setTimeout(() => {
+      // Amati elemen yang akan dianimasikan
+      document.querySelectorAll('.animate-on-scroll').forEach((el) => {
+        observer.observe(el)
+      })
+  }, 500) // Wait for data load
 })
 </script>
 

@@ -22,6 +22,11 @@ const lecturerSchema = new mongoose.Schema({
     required: true,
     trim: true
   },
+  expertise: {
+    type: String, // e.g. 'ai', 'software', 'network'
+    trim: true,
+    default: 'other'
+  },
   email: {
     type: String,
     required: true,

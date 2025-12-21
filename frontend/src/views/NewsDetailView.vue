@@ -1,13 +1,14 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import axios from 'axios'
 
 const route = useRoute()
 const router = useRouter()
 
 // Interface untuk data berita
 interface NewsItem {
-  id: number
+  id: string
   imageUrl: string
   title: string
   category: string
@@ -15,108 +16,124 @@ interface NewsItem {
   description: string
   content?: string
   featured?: boolean
+  tags?: string[]
 }
-
-// Data untuk demo, nanti bisa diubah dengan data dari API
-const newsItems: NewsItem[] = [
-  {
-    id: 1,
-    imageUrl: 'https://picsum.photos/id/234/1200/600',
-    title: 'HIMTI UNESA Menyelenggarakan Bootcamp Programming Pertama di Tahun 2023',
-    category: 'program-kerja',
-    date: '15 Mei 2023',
-    description:
-      'Himpunan Mahasiswa Teknik Informatika (HIMTI) UNESA sukses menyelenggarakan bootcamp programming perdana di tahun 2023. Acara yang diikuti oleh lebih dari 100 mahasiswa ini bertujuan untuk meningkatkan kemampuan coding anggota himpunan...',
-    content:
-      'Himpunan Mahasiswa Teknik Informatika (HIMTI) UNESA sukses menyelenggarakan bootcamp programming perdana di tahun 2023. Acara yang diikuti oleh lebih dari 100 mahasiswa ini bertujuan untuk meningkatkan kemampuan coding anggota himpunan.<br><br>Bootcamp ini berlangsung selama 3 hari dengan materi yang difokuskan pada pengembangan aplikasi web menggunakan teknologi modern seperti React, Node.js, dan MongoDB. Para peserta dibimbing langsung oleh alumni UNESA yang kini bekerja di perusahaan teknologi terkemuka.<br><br>Menurut ketua panitia, Muhammad Rizki, bootcamp ini dirancang untuk memberikan pengalaman praktis bagi mahasiswa dalam mengembangkan aplikasi yang siap digunakan di dunia kerja. "Kami berharap kegiatan ini dapat menjadi langkah awal bagi teman-teman untuk terus mengembangkan skill programming mereka," ujarnya.<br><br>Di akhir bootcamp, peserta berkesempatan untuk memamerkan proyek yang telah mereka kembangkan selama program berlangsung. Tiga tim terbaik juga mendapatkan kesempatan magang di perusahaan partner HIMTI UNESA.',
-    featured: true,
-  },
-  {
-    id: 2,
-    imageUrl: 'https://picsum.photos/id/180/600/400',
-    title: 'Workshop UI/UX Design Bersama Praktisi Industri',
-    category: 'teknologi',
-    date: '10 Mei 2023',
-    description:
-      'HIMTI UNESA mengadakan workshop UI/UX design dengan mengundang beberapa praktisi dari industri teknologi terkemuka...',
-    content:
-      'HIMTI UNESA mengadakan workshop UI/UX design dengan mengundang beberapa praktisi dari industri teknologi terkemuka. Workshop yang diadakan secara hybrid ini dihadiri oleh lebih dari 200 mahasiswa baik secara online maupun offline.<br><br>Workshop UI/UX ini menghadirkan pembicara dari perusahaan teknologi ternama seperti Tokopedia, Gojek, dan Traveloka. Para pembicara berbagi pengalaman dan tips praktis tentang bagaimana merancang antarmuka pengguna yang tidak hanya menarik secara visual tetapi juga memberikan pengalaman yang baik bagi pengguna.<br><br>Selama workshop, peserta juga berkesempatan untuk praktik langsung dengan mengerjakan studi kasus desain aplikasi mobile. Hasil karya terbaik peserta akan mendapatkan feedback langsung dari para praktisi industri, serta berpeluang untuk magang di perusahaan-perusahaan tersebut.',
-  },
-  {
-    id: 3,
-    imageUrl: 'https://picsum.photos/id/160/600/400',
-    title: 'Mahasiswa TI UNESA Raih Juara dalam Hackathon Nasional',
-    category: 'akademik',
-    date: '5 Mei 2023',
-    description:
-      'Tim mahasiswa Teknik Informatika UNESA berhasil meraih juara 2 dalam kompetisi hackathon tingkat nasional yang diadakan oleh...',
-    content:
-      'Tim mahasiswa Teknik Informatika UNESA berhasil meraih juara 2 dalam kompetisi hackathon tingkat nasional yang diadakan oleh Kementerian Pendidikan dan Kebudayaan. Kompetisi yang berlangsung selama 48 jam non-stop ini diikuti oleh ratusan tim dari berbagai perguruan tinggi di Indonesia.<br><br>Tim UNESA yang terdiri dari 5 mahasiswa program studi Teknik Informatika ini mengembangkan aplikasi bernama "EduConnect", sebuah platform yang menghubungkan siswa dengan mentor akademik secara real-time menggunakan teknologi AI.<br><br>Menurut ketua tim, Anita Wijaya, ide aplikasi ini muncul dari pengamatannya tentang sulitnya siswa mendapatkan bantuan akademik yang cepat dan tepat di luar jam sekolah. "EduConnect hadir untuk memecahkan masalah ini dengan menghubungkan siswa dengan mentor yang sesuai dengan kebutuhan mereka," jelasnya.<br><br>Kemenangan ini membawa tim UNESA untuk mewakili Indonesia dalam kompetisi hackathon internasional yang akan diselenggarakan di Singapura bulan depan.',
-  },
-  // Di sini bisa ditambahkan data artikel lainnya
-]
 
 // Data berita
 const article = ref<NewsItem | null>(null)
+const loading = ref(true)
+const error = ref('')
 
 // Data kategori
 const categories: Record<string, string> = {
-  'program-kerja': 'Program Kerja',
-  teknologi: 'Teknologi',
-  akademik: 'Akademik',
-  organisasi: 'Organisasi',
-  kerjasama: 'Kerjasama',
-  beasiswa: 'Beasiswa',
-  karir: 'Karir',
+    'program-kerja': 'Program Kerja',
+    'teknologi': 'Teknologi',
+    'akademik': 'Akademik',
+    'organisasi': 'Organisasi',
+    'kerjasama': 'Kerjasama',
+    'beasiswa': 'Beasiswa',
+    'karir': 'Karir',
+    'announcement': 'Pengumuman',
+    'article': 'Artikel',
+    'event': 'Kegiatan',
+    'achievement': 'Prestasi',
+    'other': 'Lainnya'
 }
 
-// Tags
-const tags = [
-  'Web Development',
-  'Mobile App',
-  'UI/UX',
-  'Programming',
-  'Cloud',
-  'IoT',
-  'AI',
-  'Blockchain',
-  'Data Science',
-  'Cybersecurity',
+// Tags (Fallback/Sidebar)
+const staticTags = [
+  'Web Development', 'Mobile App', 'UI/UX', 'Programming', 'Cloud',
+  'IoT', 'AI', 'Blockchain', 'Data Science', 'Cybersecurity',
 ]
 
 // Artikel terkait
 const relatedArticles = ref<NewsItem[]>([])
 
 const getCategoryName = (categoryId: string): string => {
-  return categories[categoryId] || categoryId
+  return categories[categoryId] || categoryId.charAt(0).toUpperCase() + categoryId.slice(1)
 }
 
-const goToNewsDetail = (itemId: number) => {
+const goToNewsDetail = (itemId: string) => {
   router.push(`/berita/${itemId}`)
 }
 
 const goBack = () => {
-  router.back()
+  router.push('/berita')
 }
+
+const fetchArticle = async (id: string) => {
+    try {
+        loading.value = true
+        const response = await axios.get(`/api/news/${id}`)
+        const data = response.data
+        
+        const pubDate = new Date(data.publishDate || data.createdAt)
+        const formattedDate = pubDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })
+        
+        article.value = {
+            id: data._id,
+            imageUrl: data.featuredImage || data.thumbnail || 'https://picsum.photos/id/1/1200/600',
+            title: data.title,
+            category: data.category,
+            date: formattedDate,
+            description: data.summary,
+            content: data.content,
+            featured: data.status === 'published',
+            tags: data.tags || []
+        }
+        
+        // Fetch related articles
+        fetchRelatedArticles(data.category, data._id)
+        
+    } catch (err) {
+        console.error('Error fetching article:', err)
+        error.value = 'Gagal memuat artikel'
+        // router.push('/berita') // Redirect if not found?
+    } finally {
+        loading.value = false
+    }
+}
+
+const fetchRelatedArticles = async (category: string, currentId: string) => {
+    try {
+        const response = await axios.get(`/api/news`, { params: { category, limit: 4, status: 'published' } })
+        const backendData = response.data.news || (Array.isArray(response.data) ? response.data : [])
+        
+        if (Array.isArray(backendData)) {
+             relatedArticles.value = backendData
+                .filter((item: any) => item._id !== currentId)
+                .slice(0, 3)
+                .map((item: any) => {
+                    const pubDate = new Date(item.publishDate)
+                    const formattedDate = pubDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })
+                    
+                    return {
+                        id: item._id,
+                        imageUrl: item.thumbnail || item.featuredImage || 'https://picsum.photos/id/2/600/400',
+                        title: item.title,
+                        category: item.category,
+                        date: formattedDate,
+                        description: item.summary
+                    }
+                })
+        }
+    } catch (err) {
+        console.error('Error fetching related articles:', err)
+    }
+}
+
+// Watch rute parameter changes to refetch data (e.g. clicking related article)
+watch(() => route.params.id, (newId) => {
+    if (newId) fetchArticle(newId as string)
+})
 
 onMounted(() => {
   // Mendapatkan ID artikel dari parameter URL
-  const newsId = parseInt(route.params.id as string)
-
-  // Temukan artikel berdasarkan ID
-  article.value = newsItems.find((item) => item.id === newsId) || null
-
-  // Jika artikel tidak ditemukan, kembali ke halaman berita
-  if (!article.value) {
-    router.push('/berita')
-    return
+  const newsId = route.params.id as string
+  if (newsId) {
+      fetchArticle(newsId)
   }
-
-  // Dapatkan artikel terkait (artikel lain dengan kategori yang sama)
-  relatedArticles.value = newsItems
-    .filter((item) => item.id !== newsId && item.category === article.value?.category)
-    .slice(0, 3)
-
+  
   // Scroll ke atas halaman
   window.scrollTo(0, 0)
 })
@@ -149,8 +166,8 @@ onMounted(() => {
             <p v-html="article.content"></p>
 
             <!-- Tags -->
-            <div class="article-tags">
-              <span class="tag" v-for="(tag, index) in tags.slice(0, 3)" :key="index">{{
+            <div class="article-tags" v-if="article.tags && article.tags.length > 0">
+              <span class="tag" v-for="(tag, index) in article.tags" :key="index">{{
                 tag
               }}</span>
             </div>
@@ -223,7 +240,7 @@ onMounted(() => {
           <div class="sidebar-section tag-section">
             <h3>Tags</h3>
             <div class="tag-cloud">
-              <a href="#" v-for="(tag, index) in tags" :key="index" class="tag">{{ tag }}</a>
+              <a href="#" v-for="(tag, index) in staticTags" :key="index" class="tag">{{ tag }}</a>
             </div>
           </div>
         </aside>

@@ -5,17 +5,28 @@
         <img class="logo" src="@/assets/logo.svg" alt="Logo HMPTI" width="80" height="80" />
         <h2 class="organization-name">HMP TI UNESA</h2>
       </div>
-      <h1>Login Admin</h1>
+      <h1>Login Anggota</h1>
+      
+      <div v-if="errorMessage" class="error-alert">
+        {{ errorMessage }}
+      </div>
+
       <form @submit.prevent="handleLogin">
         <div class="form-group">
-          <label for="username">Username</label>
-          <input type="text" id="username" v-model="username" required>
+          <label for="email">Email</label>
+          <input type="email" id="email" v-model="email" placeholder="contoh@email.com" required>
         </div>
         <div class="form-group">
           <label for="password">Password</label>
           <input type="password" id="password" v-model="password" required>
         </div>
-        <button type="submit" class="login-btn">Masuk</button>
+        <button type="submit" class="login-btn" :disabled="isLoading">
+          {{ isLoading ? 'Memproses...' : 'Masuk' }}
+        </button>
+
+        <div class="register-link">
+          Belum punya akun? <router-link to="/register">Daftar sekarang</router-link>
+        </div>
       </form>
       <div class="tagline">Berdaya, Berkarya, dan Bermanfaat</div>
     </div>
@@ -25,22 +36,46 @@
 <script setup>
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
+import axios from 'axios'
 
 const router = useRouter()
-const username = ref('')
+const email = ref('')
 const password = ref('')
+const isLoading = ref(false)
+const errorMessage = ref('')
 
-const handleLogin = () => {
-  // Implementasi logika login di sini
-  console.log('Login dengan:', username.value, password.value)
-  
-  // Contoh sederhana (ganti dengan logika autentikasi yang sesungguhnya)
-  if (username.value && password.value) {
-    // Simpan token atau status login
-    localStorage.setItem('isLoggedIn', 'true')
+const handleLogin = async () => {
+  isLoading.value = true
+  errorMessage.value = ''
+
+  try {
+    const response = await axios.post('http://localhost:5000/api/users/login', {
+      email: email.value,
+      password: password.value
+    })
+
+    const { token, user } = response.data
+
+    // Simpan token dan data user
+    localStorage.setItem('token', token)
+    localStorage.setItem('user', JSON.stringify(user))
+    localStorage.setItem('isLoggedIn', 'true') // Backward compatibility if needed
     
-    // Redirect ke halaman utama atau halaman sebelumnya
+    // Redirect ke halaman utama
     router.push('/')
+    
+    // Trigger event agar komponen lain tau ada perubahan auth (optional hack for non-pinia apps)
+    window.dispatchEvent(new Event('storage'))
+
+  } catch (error) {
+    console.error('Login error:', error)
+    if (error.response && error.response.data && error.response.data.message) {
+      errorMessage.value = error.response.data.message
+    } else {
+      errorMessage.value = 'Gagal login. Periksa koneksi atau kredensial Anda.'
+    }
+  } finally {
+    isLoading.value = false
   }
 }
 </script>
@@ -135,5 +170,25 @@ input:focus {
   font-style: italic;
   color: #777;
   font-size: 0.9rem;
+}
+.error-alert {
+  background-color: #fee2e2;
+  color: #b91c1c;
+  padding: 0.75rem;
+  border-radius: 6px;
+  margin-bottom: 1.5rem;
+  font-size: 0.9rem;
+  text-align: left;
+  border: 1px solid #fecaca;
+}
+.register-link {
+  margin-top: 1.5rem;
+  font-size: 0.9rem;
+  color: #666;
+}
+
+.register-link a {
+  color: #00A0E3;
+  font-weight: 600;
 }
 </style> 

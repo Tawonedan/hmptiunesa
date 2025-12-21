@@ -1,25 +1,42 @@
 <script setup lang="ts">
-import { RouterLink, RouterView } from 'vue-router'
-import { ref, onMounted, computed } from 'vue'
-import { useRoute } from 'vue-router'
+import { RouterLink, RouterView, useRouter, useRoute } from 'vue-router'
+import { ref, onMounted, computed, onBeforeUnmount } from 'vue'
 
 const route = useRoute()
+const router = useRouter()
 const isMenuOpen = ref(false)
+
+// User State
+const isLoggedIn = ref(false)
+const currentUser = ref<any>(null)
+const isUserDropdownOpen = ref(false)
 
 // Check if current route is admin route
 const isAdminRoute = computed(() => {
   return route.path.startsWith('/admin')
 })
 
-// Check if user is logged in
-const isLoggedIn = computed(() => {
-  return localStorage.getItem('token') !== null
-})
+// Fungsi untuk memeriksa status login
+const checkLoginStatus = () => {
+  const token = localStorage.getItem('token')
+  const userStr = localStorage.getItem('user')
+  
+  if (token && userStr) {
+    isLoggedIn.value = true
+    try {
+      currentUser.value = JSON.parse(userStr)
+    } catch (e) {
+      currentUser.value = { nama: 'User' }
+    }
+  } else {
+    isLoggedIn.value = false
+    currentUser.value = null
+  }
+}
 
 // Fungsi untuk toggle menu mobile
 const toggleMenu = () => {
   isMenuOpen.value = !isMenuOpen.value
-  // Jika menu terbuka, nonaktifkan scroll
   document.body.style.overflow = isMenuOpen.value ? 'hidden' : ''
 }
 
@@ -28,6 +45,48 @@ const closeMenu = () => {
   isMenuOpen.value = false
   document.body.style.overflow = ''
 }
+
+// User Dropdown Functions
+const toggleUserDropdown = () => {
+  isUserDropdownOpen.value = !isUserDropdownOpen.value
+}
+
+const closeUserDropdown = () => {
+  isUserDropdownOpen.value = false
+}
+
+const handleLogout = () => {
+  localStorage.removeItem('token')
+  localStorage.removeItem('user')
+  localStorage.removeItem('isLoggedIn')
+  
+  isLoggedIn.value = false
+  currentUser.value = null
+  isUserDropdownOpen.value = false
+  
+  router.push('/login')
+}
+
+// Listen for storage events (login from other tabs or components)
+const handleStorageChange = () => {
+  checkLoginStatus()
+}
+
+onMounted(() => {
+  checkLoginStatus()
+  window.addEventListener('storage', handleStorageChange)
+  // Close dropdown when clicking outside
+  document.addEventListener('click', (e: any) => {
+    if (!e.target.closest('.user-dropdown')) {
+      isUserDropdownOpen.value = false
+    }
+  })
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('storage', handleStorageChange)
+  document.removeEventListener('click', () => {})
+})
 </script>
 
 <template>
@@ -53,6 +112,26 @@ const closeMenu = () => {
       </nav>
 
       <div class="navbar-right">
+        <!-- Login Button (Visible when NOT logged in) -->
+        <RouterLink v-if="!isLoggedIn" to="/login" class="login-btn">Login</RouterLink>
+        
+        <!-- User Dropdown (Visible when logged in) -->
+        <div v-else class="user-dropdown">
+          <button class="user-btn" @click.stop="toggleUserDropdown">
+            <span class="user-name">{{ currentUser?.nama || 'User' }}</span>
+            <span class="dropdown-icon" :class="{ 'rotated': isUserDropdownOpen }">▼</span>
+          </button>
+          
+          <div class="dropdown-menu" :class="{ 'show': isUserDropdownOpen }">
+            <RouterLink to="/user/dashboard" class="dropdown-item" @click="closeUserDropdown">
+              <span class="icon">👤</span> Profil
+            </RouterLink>
+            <button class="dropdown-item logout" @click="handleLogout">
+              <span class="icon">🚪</span> Keluar
+            </button>
+          </div>
+        </div>
+        
         <!-- Hamburger Menu Button -->
         <button
           class="hamburger-btn"
@@ -399,6 +478,126 @@ a {
 .navbar-right {
   display: flex;
   align-items: center;
+  gap: 1rem;
+}
+
+.login-btn {
+  padding: 0.5rem 1.25rem;
+  background-color: var(--primary-color);
+  color: white !important;
+  border-radius: 2rem;
+  font-weight: 600;
+  font-size: 0.95rem;
+  transition: all 0.3s ease;
+  border: 2px solid transparent;
+}
+
+.login-btn:hover {
+  background-color: transparent;
+  color: var(--primary-color) !important;
+  border-color: var(--primary-color);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 6px rgba(0, 100, 172, 0.2);
+}
+
+/* User Dropdown */
+.user-dropdown {
+  position: relative;
+}
+
+.user-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: transparent;
+  border: 1px solid transparent;
+  padding: 0.5rem 1rem;
+  border-radius: 2rem;
+  cursor: pointer;
+  color: var(--text-color);
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.user-btn:hover {
+  background-color: #f8fafc;
+  border-color: #e2e8f0;
+}
+
+.user-name {
+  max-width: 150px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dropdown-icon {
+  font-size: 0.8rem;
+  transition: transform 0.2s ease;
+  color: #94a3b8;
+}
+
+.dropdown-icon.rotated {
+  transform: rotate(180deg);
+}
+
+.dropdown-menu {
+  position: absolute;
+  top: 120%;
+  right: 0;
+  width: 200px;
+  background-color: white;
+  border-radius: 0.75rem;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  border: 1px solid #e2e8f0;
+  padding: 0.5rem;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-10px);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  z-index: 1002;
+}
+
+.dropdown-menu.show {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+.dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.75rem 1rem;
+  color: var(--text-color);
+  font-size: 0.95rem;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.dropdown-item:hover {
+  background-color: #f1f5f9;
+  color: var(--primary-color);
+}
+
+.dropdown-item.logout {
+  color: #ef4444;
+  margin-top: 0.25rem;
+  border-top: 1px solid #f1f5f9;
+  border-radius: 0 0 0.5rem 0.5rem;
+}
+
+.dropdown-item.logout:hover {
+  background-color: #fef2f2;
+}
+
+.icon {
+  font-size: 1.1rem;
 }
 
 /* Hamburger Button */
