@@ -458,7 +458,7 @@ const closeProfilePopup = () => {
       </div>
 
       <!-- Fungsionaris List -->
-      <section v-else class="fungsionaris-grid-section animate-on-scroll">
+      <section v-else class="fungsionaris-grid-section">
         <!-- Empty State -->
         <div v-if="filteredFungsionaris.length === 0" class="empty-state">
           <div class="empty-icon">👨‍💼</div>

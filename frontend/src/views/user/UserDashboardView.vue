@@ -28,7 +28,7 @@ const handleLogout = () => {
 
       <div class="dashboard-grid">
         <!-- Card 1: Profil -->
-        <div class="dashboard-card" @click="router.push('/profil')">
+        <div class="dashboard-card" @click="router.push('/user/profil')">
           <div class="card-icon">👤</div>
           <h3>Profil Saya</h3>
           <p>Lihat dan atur informasi profil anggota Anda.</p>

@@ -80,6 +80,11 @@ const router = createRouter({
       name: 'user-dashboard',
       component: () => import('../views/user/UserDashboardView.vue'),
     },
+    {
+      path: '/user/profil',
+      name: 'user-profile',
+      component: () => import('../views/user/UserProfileView.vue'),
+    },
     // Admin Routes
     {
       path: '/admin/login',
