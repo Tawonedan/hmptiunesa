@@ -3,12 +3,24 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
-const username = ref('Anggota') // In a real app, get this from store/auth
+const username = ref('Anggota') // Default fallback
 
 onMounted(() => {
   const isLoggedIn = localStorage.getItem('isLoggedIn')
   if (isLoggedIn !== 'true') {
     router.push('/login')
+  } else {
+    const userStr = localStorage.getItem('user')
+    if (userStr) {
+      try {
+        const user = JSON.parse(userStr)
+        if (user && user.nama) {
+          username.value = user.nama
+        }
+      } catch (e) {
+        console.error('Error parsing user data:', e)
+      }
+    }
   }
 })
 
@@ -23,7 +35,7 @@ const handleLogout = () => {
     <div class="dashboard-content">
       <div class="welcome-section">
         <h1>Selamat Datang, <span>{{ username }}</span>! 👋</h1>
-        <p>Akses berbagai layanan dan informasi khusus anggota HMP TI UNESA di sini.</p>
+        <p>Akses berbagai layanan dan informasi anggota HMP TI UNESA di sini.</p>
       </div>
 
       <div class="dashboard-grid">
@@ -43,17 +55,9 @@ const handleLogout = () => {
 
         <!-- Card 3: Forum -->
         <div class="dashboard-card">
-          <div class="card-icon">💬</div>
-          <h3>Forum Diskusi</h3>
-          <p>Berdiskusi dengan sesama anggota HMP TI.</p>
-          <span class="badge">Segera Hadir</span>
-        </div>
-
-        <!-- Card 4: Dokumen -->
-        <div class="dashboard-card">
-          <div class="card-icon">📂</div>
-          <h3>Arsip Dokumen</h3>
-          <p>Akses bank soal, materi kuliah, dan dokumen organisasi.</p>
+          <div class="card-icon">💻</div>
+          <h3>Projek Saya</h3>
+          <p>Submit projek anda untuk dipublikasikan</p>
           <span class="badge">Segera Hadir</span>
         </div>
       </div>

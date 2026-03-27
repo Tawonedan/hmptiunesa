@@ -118,7 +118,7 @@ onBeforeUnmount(() => {
         <!-- User Dropdown (Visible when logged in) -->
         <div v-else class="user-dropdown">
           <button class="user-btn" @click.stop="toggleUserDropdown">
-            <span class="user-name">{{ currentUser?.nama || 'User' }}</span>
+            <span class="user-name">{{ currentUser?.nama || 'Pengguna' }}</span>
             <span class="dropdown-icon" :class="{ 'rotated': isUserDropdownOpen }">▼</span>
           </button>
           

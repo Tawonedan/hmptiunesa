@@ -106,37 +106,37 @@ const router = createRouter({
         {
           path: 'dosen',
           name: 'admin-dosen',
-          component: () => import('../views/admin/AdminDashboardView.vue'), // Temporary placeholder
+          component: () => import('../views/admin/AdminDosenView.vue'),
         },
         {
           path: 'events',
           name: 'admin-events',
-          component: () => import('../views/admin/AdminDashboardView.vue'), // Temporary placeholder
+          component: () => import('../views/admin/AdminEventsView.vue'),
         },
         {
           path: 'fungsionaris',
           name: 'admin-fungsionaris',
-          component: () => import('../views/admin/AdminDashboardView.vue'), // Temporary placeholder
+          component: () => import('../views/admin/AdminFungsionarisView.vue'),
         },
         {
           path: 'gallery',
           name: 'admin-gallery',
-          component: () => import('../views/admin/AdminDashboardView.vue'), // Temporary placeholder
+          component: () => import('../views/admin/AdminGalleryView.vue'),
         },
         {
           path: 'members',
           name: 'admin-members',
-          component: () => import('../views/admin/AdminDashboardView.vue'), // Temporary placeholder
+          component: () => import('../views/admin/AdminMembersView.vue'),
         },
         {
           path: 'news',
           name: 'admin-news',
-          component: () => import('../views/admin/AdminDashboardView.vue'), // Temporary placeholder
+          component: () => import('../views/admin/AdminNewsView.vue'),
         },
         {
           path: 'projects',
           name: 'admin-projects',
-          component: () => import('../views/admin/AdminDashboardView.vue'), // Temporary placeholder
+          component: () => import('../views/admin/AdminProjectsView.vue'),
         },
       ]
     }

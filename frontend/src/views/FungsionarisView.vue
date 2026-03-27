@@ -105,7 +105,7 @@ const fetchFungsionaris = async () => {
           id: item._id, // Menggunakan _id dari MongoDB sebagai id
           nama: item.name,
           nim: item.studentId,
-          angkatan: '2023', // Static or from DB if available
+          angkatan: item.period, // Static or from DB if available (item.period)
           jabatan: item.position,
           departemen: item.department,
           email: item.email,
