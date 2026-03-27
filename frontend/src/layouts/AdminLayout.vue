@@ -36,9 +36,12 @@ onMounted(() => {
 .main-content {
   flex: 1;
   margin-left: 16rem; /* Match sidebar width */
+  min-width: 0; /* Fixes flex child expanding past viewport */
+  width: calc(100vw - 16rem);
+  overflow-x: hidden;
 }
 
 .content-wrapper {
-  padding: 2rem;
+  padding: 0;
 }
 </style>

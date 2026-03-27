@@ -1,4 +1,5 @@
 const Member = require('../models/Member');
+const { formatFileUrl } = require('../middleware/uploadMiddleware');
 
 // Mendapatkan semua anggota
 exports.getAllMembers = async (req, res) => {
@@ -46,6 +47,9 @@ exports.getMemberById = async (req, res) => {
 // Membuat data anggota baru
 exports.createMember = async (req, res) => {
   try {
+    if (req.file) {
+      req.body.photo = formatFileUrl(req);
+    }
     const member = await Member.create(req.body);
     
     res.status(201).json({
@@ -65,6 +69,9 @@ exports.createMember = async (req, res) => {
 // Memperbarui data anggota
 exports.updateMember = async (req, res) => {
   try {
+    if (req.file) {
+      req.body.photo = formatFileUrl(req);
+    }
     const member = await Member.findByIdAndUpdate(
       req.params.id,
       req.body,

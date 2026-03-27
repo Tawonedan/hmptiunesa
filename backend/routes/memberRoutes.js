@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const memberController = require('../controllers/memberController');
+const { uploadSingle, handleUploadError } = require('../middleware/uploadMiddleware');
 
 // Routes GET
 router.get('/', memberController.getAllMembers);
@@ -11,10 +12,10 @@ router.get('/department/:department', memberController.getMembersByDepartment);
 router.get('/:id', memberController.getMemberById);
 
 // Routes POST
-router.post('/', memberController.createMember);
+router.post('/', uploadSingle('photo'), handleUploadError, memberController.createMember);
 
 // Routes PUT
-router.put('/:id', memberController.updateMember);
+router.put('/:id', uploadSingle('photo'), handleUploadError, memberController.updateMember);
 
 // Routes DELETE
 router.delete('/:id', memberController.deleteMember);

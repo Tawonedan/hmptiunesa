@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const functionaryController = require('../controllers/functionaryController');
+const { uploadSingle, handleUploadError } = require('../middleware/uploadMiddleware');
 
 // Routes GET
 router.get('/', functionaryController.getAllFunctionaries);
@@ -10,10 +11,10 @@ router.get('/department/:department', functionaryController.getFunctionariesByDe
 router.get('/:id', functionaryController.getFunctionaryById);
 
 // Routes POST
-router.post('/', functionaryController.createFunctionary);
+router.post('/', uploadSingle('photo'), handleUploadError, functionaryController.createFunctionary);
 
 // Routes PUT
-router.put('/:id', functionaryController.updateFunctionary);
+router.put('/:id', uploadSingle('photo'), handleUploadError, functionaryController.updateFunctionary);
 
 // Routes DELETE
 router.delete('/:id', functionaryController.deleteFunctionary);

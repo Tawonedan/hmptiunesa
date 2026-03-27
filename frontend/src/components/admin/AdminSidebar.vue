@@ -6,15 +6,13 @@ const route = useRoute()
 
 const menuItems = [
   { name: 'Dashboard', icon: '📊', path: '/admin/dashboard' },
+  { name: 'Fungsionaris', icon: '👥', path: '/admin/fungsionaris' },
+  { name: 'Members', icon: '👤', path: '/admin/members' },
   { name: 'Dosen', icon: '👨‍🏫', path: '/admin/dosen' },
   { name: 'Events', icon: '📅', path: '/admin/events' },
-  { name: 'Fungsionaris', icon: '👥', path: '/admin/fungsionaris' },
-  { name: 'Gallery', icon: '🖼️', path: '/admin/gallery' },
-  { name: 'Home Content', icon: '🏠', path: '/admin/home' },
-  { name: 'Members', icon: '👤', path: '/admin/members' },
-  { name: 'News', icon: '📰', path: '/admin/news' },
-  { name: 'Organization', icon: '🏢', path: '/admin/organization' },
   { name: 'Projects', icon: '💼', path: '/admin/projects' },
+  { name: 'Gallery', icon: '🖼️', path: '/admin/gallery' },
+  { name: 'News', icon: '📰', path: '/admin/news' },
 ]
 
 const isActive = (path: string) => route.path === path

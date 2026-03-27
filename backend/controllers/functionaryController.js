@@ -1,4 +1,5 @@
 const Functionary = require('../models/Functionary');
+const { formatFileUrl } = require('../middleware/uploadMiddleware');
 
 // Mendapatkan semua fungsionaris
 exports.getAllFunctionaries = async (req, res) => {
@@ -46,6 +47,9 @@ exports.getFunctionaryById = async (req, res) => {
 // Membuat data fungsionaris baru
 exports.createFunctionary = async (req, res) => {
   try {
+    if (req.file) {
+      req.body.photo = formatFileUrl(req);
+    }
     const functionary = await Functionary.create(req.body);
     
     res.status(201).json({
@@ -65,6 +69,9 @@ exports.createFunctionary = async (req, res) => {
 // Memperbarui data fungsionaris
 exports.updateFunctionary = async (req, res) => {
   try {
+    if (req.file) {
+      req.body.photo = formatFileUrl(req);
+    }
     const functionary = await Functionary.findByIdAndUpdate(
       req.params.id,
       req.body,

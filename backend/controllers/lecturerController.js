@@ -1,4 +1,5 @@
 const Lecturer = require('../models/Lecturer');
+const { formatFileUrl } = require('../middleware/uploadMiddleware');
 
 // Mendapatkan semua dosen
 exports.getAllLecturers = async (req, res) => {
@@ -46,6 +47,9 @@ exports.getLecturerById = async (req, res) => {
 // Membuat data dosen baru
 exports.createLecturer = async (req, res) => {
   try {
+    if (req.file) {
+      req.body.photo = formatFileUrl(req);
+    }
     const lecturer = await Lecturer.create(req.body);
     
     res.status(201).json({
@@ -65,6 +69,9 @@ exports.createLecturer = async (req, res) => {
 // Memperbarui data dosen
 exports.updateLecturer = async (req, res) => {
   try {
+    if (req.file) {
+      req.body.photo = formatFileUrl(req);
+    }
     const lecturer = await Lecturer.findByIdAndUpdate(
       req.params.id,
       req.body,

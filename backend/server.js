@@ -11,7 +11,9 @@ const eventRoutes = require('./routes/eventRoutes');
 const newsRoutes = require('./routes/newsRoutes');
 const galleryRoutes = require('./routes/galleryRoutes');
 const lecturerRoutes = require('./routes/lecturerRoutes');
+const lecturerExpertiseRoutes = require('./routes/lecturerExpertiseRoutes');
 const functionaryRoutes = require('./routes/functionaryRoutes');
+const functionaryDepartRoutes = require('./routes/functionaryDepartRoutes');
 const memberRoutes = require('./routes/memberRoutes');
 const projectRoutes = require('./routes/projectRoutes');
 
@@ -40,7 +42,9 @@ app.use('/api/events', eventRoutes);
 app.use('/api/news', newsRoutes);
 app.use('/api/gallery', galleryRoutes);
 app.use('/api/lecturers', lecturerRoutes);
+app.use('/api/lecturers-expertise', lecturerExpertiseRoutes);
 app.use('/api/functionaries', functionaryRoutes);
+app.use('/api/functionaries-departs', functionaryDepartRoutes);
 app.use('/api/members', memberRoutes);
 app.use('/api/projects', projectRoutes);
 
