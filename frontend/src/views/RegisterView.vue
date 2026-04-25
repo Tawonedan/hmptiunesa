@@ -92,11 +92,11 @@ const handleRegister = async () => {
       password: formData.password
     })
 
-    successMessage.value = 'Registrasi berhasil! Mengalihkan ke halaman login...'
+    successMessage.value = 'Registrasi berhasil! Mengalihkan ke halaman verifikasi...'
     
     // Auto redirect after 2 seconds
     setTimeout(() => {
-      router.push('/login')
+      router.push({ path: '/verify-email', query: { email: formData.email } })
     }, 2000)
 
   } catch (error) {

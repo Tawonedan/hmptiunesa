@@ -9,6 +9,11 @@
       
       <div v-if="errorMessage" class="error-alert">
         {{ errorMessage }}
+        <div v-if="showVerifyBtn" style="margin-top: 10px;">
+          <router-link :to="'/verify-email?email=' + email" style="color: #b91c1c; text-decoration: underline; font-weight: bold;">
+            Verifikasi Akun
+          </router-link>
+        </div>
       </div>
 
       <form @submit.prevent="handleLogin">
@@ -43,10 +48,12 @@ const email = ref('')
 const password = ref('')
 const isLoading = ref(false)
 const errorMessage = ref('')
+const showVerifyBtn = ref(false)
 
 const handleLogin = async () => {
   isLoading.value = true
   errorMessage.value = ''
+  showVerifyBtn.value = false
 
   try {
     const response = await axios.post('http://localhost:5000/api/users/login', {
@@ -71,6 +78,9 @@ const handleLogin = async () => {
     console.error('Login error:', error)
     if (error.response && error.response.data && error.response.data.message) {
       errorMessage.value = error.response.data.message
+      if (error.response.data.isVerified === false) {
+        showVerifyBtn.value = true
+      }
     } else {
       errorMessage.value = 'Gagal login. Periksa koneksi atau kredensial Anda.'
     }

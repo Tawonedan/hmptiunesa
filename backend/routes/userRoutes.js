@@ -6,6 +6,8 @@ const { protect, adminMiddleware } = require('../middleware/authMiddleware');
 // Public routes
 router.post('/register', userController.register);
 router.post('/login', userController.login);
+router.post('/verify-email', userController.verifyEmail);
+router.post('/resend-otp', userController.resendOtp);
 
 // Protected routes
 router.get('/me', protect, userController.getCurrentUser);

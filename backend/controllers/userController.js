@@ -2,6 +2,7 @@ const User = require('../models/User');
 const Member = require('../models/Member');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
+const sendEmail = require('../utils/sendEmail');
 
 // Register user
 exports.register = async (req, res) => {
@@ -31,13 +32,19 @@ exports.register = async (req, res) => {
       return res.status(400).json({ message: 'Akun untuk NIM ini sudah ada' });
     }
 
+    // Generate OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
     // Buat user baru
     user = new User({
       nama,
       email,
       password,
       nim,
-      role: 'anggota' // Default role
+      role: 'anggota', // Default role
+      verificationToken: otp,
+      verificationExpires: otpExpires
     });
 
     // Hash password
@@ -47,21 +54,21 @@ exports.register = async (req, res) => {
     // Simpan user
     await user.save();
 
-    // Buat JWT token
-    const payload = {
-      id: user.id,
-      role: user.role
-    };
-
-    jwt.sign(
-      payload,
-      process.env.JWT_SECRET,
-      { expiresIn: '7d' },
-      (err, token) => {
-        if (err) throw err;
-        res.status(201).json({ token });
-      }
-    );
+    // Send email
+    try {
+      const message = `Kode verifikasi pendaftaran akun Anda adalah: ${otp}\nKode ini akan kadaluarsa dalam 10 menit.`;
+      const html = `<p>Halo ${nama},</p><p>Kode verifikasi pendaftaran akun Anda adalah: <strong>${otp}</strong></p><p>Kode ini akan kadaluarsa dalam 10 menit.</p>`;
+      await sendEmail({
+        email: user.email,
+        subject: 'Verifikasi Akun HMPTI UNESA',
+        message,
+        html
+      });
+      res.status(201).json({ message: 'Registrasi berhasil. Silakan cek email Anda untuk kode verifikasi.', email: user.email });
+    } catch (err) {
+      // Jika email gagal dikirim, hapus user agar bisa daftar ulang, atau biarkan agar bisa resend
+      res.status(500).json({ message: 'Registrasi berhasil tapi gagal mengirim email verifikasi', error: err.message });
+    }
   } catch (error) {
     res.status(500).json({ message: 'Terjadi kesalahan', error: error.message });
   }
@@ -82,6 +89,11 @@ exports.login = async (req, res) => {
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
       return res.status(400).json({ message: 'Email atau password salah' });
+    }
+
+    // Cek status verifikasi
+    if (!user.isVerified) {
+      return res.status(403).json({ message: 'Akun belum diverifikasi. Silakan cek email Anda.', isVerified: false });
     }
 
     // Buat JWT token
@@ -203,6 +215,103 @@ exports.updateUserRole = async (req, res) => {
     }
 
     res.json(user);
+  } catch (error) {
+    res.status(500).json({ message: 'Terjadi kesalahan', error: error.message });
+  }
+};
+
+// Verify Email
+exports.verifyEmail = async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ message: 'User tidak ditemukan' });
+    }
+
+    if (user.isVerified) {
+      return res.status(400).json({ message: 'Akun sudah terverifikasi' });
+    }
+
+    if (user.verificationToken !== otp) {
+      return res.status(400).json({ message: 'Kode OTP salah' });
+    }
+
+    if (new Date() > user.verificationExpires) {
+      return res.status(400).json({ message: 'Kode OTP sudah kadaluarsa. Silakan kirim ulang.' });
+    }
+
+    // Mark as verified
+    user.isVerified = true;
+    user.verificationToken = undefined;
+    user.verificationExpires = undefined;
+    await user.save();
+
+    // Optionally login directly
+    const payload = {
+      id: user.id,
+      role: user.role
+    };
+
+    jwt.sign(
+      payload,
+      process.env.JWT_SECRET,
+      { expiresIn: '7d' },
+      (err, token) => {
+        if (err) throw err;
+        res.json({
+          message: 'Verifikasi berhasil',
+          token,
+          user: {
+            id: user.id,
+            nama: user.nama,
+            email: user.email,
+            role: user.role,
+            nim: user.nim
+          }
+        });
+      }
+    );
+  } catch (error) {
+    res.status(500).json({ message: 'Terjadi kesalahan', error: error.message });
+  }
+};
+
+// Resend OTP
+exports.resendOtp = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ message: 'User tidak ditemukan' });
+    }
+
+    if (user.isVerified) {
+      return res.status(400).json({ message: 'Akun sudah terverifikasi' });
+    }
+
+    // Generate new OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+    user.verificationToken = otp;
+    user.verificationExpires = otpExpires;
+    await user.save();
+
+    // Send email
+    const message = `Kode verifikasi baru Anda adalah: ${otp}\nKode ini akan kadaluarsa dalam 10 menit.`;
+    const html = `<p>Halo ${user.nama},</p><p>Kode verifikasi baru Anda adalah: <strong>${otp}</strong></p><p>Kode ini akan kadaluarsa dalam 10 menit.</p>`;
+    
+    await sendEmail({
+      email: user.email,
+      subject: 'Kode Verifikasi Baru HMPTI UNESA',
+      message,
+      html
+    });
+
+    res.json({ message: 'Kode OTP baru telah dikirim ke email Anda' });
   } catch (error) {
     res.status(500).json({ message: 'Terjadi kesalahan', error: error.message });
   }

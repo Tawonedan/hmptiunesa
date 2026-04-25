@@ -29,6 +29,16 @@ const userSchema = new mongoose.Schema({
   tanggalMasuk: {
     type: Date,
     default: Date.now
+  },
+  isVerified: {
+    type: Boolean,
+    default: false
+  },
+  verificationToken: {
+    type: String
+  },
+  verificationExpires: {
+    type: Date
   }
 }, { timestamps: true });
 
