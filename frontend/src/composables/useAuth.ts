@@ -1,146 +1,190 @@
-import { ref } from 'vue'
+// =============================================================================
+// Auth Composable
+// Supabase Auth wrapper for the CMS portal.
+//
+// Exposes a reactive auth state (session, profile, role) plus login / logout
+// / refresh helpers. The composable is a thin façade over supabase.auth so
+// components stay decoupled from the underlying client.
+// =============================================================================
 
-interface UserData {
-  id: number;
-  name: string;
-  email: string;
-  role: string;
-  avatar?: string;
+import { ref, computed, type Ref, type ComputedRef } from 'vue'
+
+import { getSupabase, isSupabaseConfigured } from '@/lib/supabase'
+import type { Profile, UserRole } from '@/types/database'
+
+// ── Reactive State ───────────────────────────────────────────────────────────
+// Module-scoped so every component using useAuth() shares the same refs.
+
+const session = ref<Awaited<ReturnType<ReturnType<typeof getSupabase>['auth']['getSession']>>['data']['session']>(null)
+const profile = ref<Profile | null>(null)
+const authLoading = ref(false)
+const authError = ref<string | null>(null)
+
+let authListenerRegistered = false
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+const fetchProfile = async (userId: string): Promise<Profile | null> => {
+  if (!isSupabaseConfigured()) return null
+  try {
+    const client = getSupabase()
+    const { data, error: profileError } = await client
+      .from('profiles')
+      .select('*')
+      .eq('id', userId)
+      .eq('is_active', true)
+      .maybeSingle()
+
+    if (profileError) {
+      console.warn('[useAuth] profile lookup failed:', profileError.message)
+      return null
+    }
+    return (data as Profile | null) ?? null
+  } catch (err) {
+    console.warn('[useAuth] profile lookup threw:', err)
+    return null
+  }
 }
 
-export function useAuth() {
-  const user = ref<UserData | null>(null)
-  const isAuthenticated = ref(false)
-  const token = ref<string | null>(null)
-  const loading = ref(false)
-  const error = ref<string | null>(null)
+const refreshSessionAndProfile = async () => {
+  if (!isSupabaseConfigured()) return
+  const client = getSupabase()
+  try {
+    const { data } = await client.auth.getSession()
+    session.value = data.session
+    profile.value = data.session?.user
+      ? await fetchProfile(data.session.user.id)
+      : null
+  } catch (err) {
+    console.warn('[useAuth] refresh failed:', err)
+    session.value = null
+    profile.value = null
+  }
+}
 
-  // Cek apakah user sudah login
-  const checkAuth = () => {
-    const storedToken = localStorage.getItem('token')
-    if (storedToken) {
-      token.value = storedToken
-      isAuthenticated.value = true
-      // Dalam kondisi development, kita simulasikan data user
-      if (process.env.NODE_ENV === 'development') {
-        user.value = {
-          id: 1,
-          name: 'Admin Himpunan',
-          email: 'admin@example.com',
-          role: 'admin',
-          avatar: 'https://via.placeholder.com/150'
-        }
-      } else {
-        // Di production, load user data dari API berdasarkan token
-        loadUserData()
-      }
-      return true
+const ensureAuthListener = () => {
+  if (authListenerRegistered || !isSupabaseConfigured()) return
+  const client = getSupabase()
+  client.auth.onAuthStateChange((_event, newSession) => {
+    session.value = newSession
+    if (newSession?.user) {
+      void fetchProfile(newSession.user.id).then((p) => {
+        profile.value = p
+      })
+    } else {
+      profile.value = null
     }
-    return false
+  })
+  authListenerRegistered = true
+}
+
+// ── Composable ───────────────────────────────────────────────────────────────
+
+export interface UseAuthReturn {
+  session: Ref<typeof session.value>
+  profile: Ref<Profile | null>
+  user: ComputedRef<typeof session.value extends null ? null : { id: string; email: string | null } | null>
+  isAuthenticated: ComputedRef<boolean>
+  role: ComputedRef<UserRole | null>
+  isAdmin: ComputedRef<boolean>
+  isEditor: ComputedRef<boolean>
+  loading: Ref<boolean>
+  error: Ref<string | null>
+  login: (email: string, password: string) => Promise<boolean>
+  logout: () => Promise<void>
+  refresh: () => Promise<void>
+}
+
+export function useAuth(): UseAuthReturn {
+  ensureAuthListener()
+  // Trigger an initial session hydration on first use.
+  if (session.value === null && isSupabaseConfigured()) {
+    void refreshSessionAndProfile()
   }
 
-  // Login function
-  const login = async (email: string, password: string) => {
-    loading.value = true
-    error.value = null
-    
+  const user = computed(() =>
+    session.value?.user
+      ? { id: session.value.user.id, email: session.value.user.email ?? null }
+      : null,
+  )
+
+  const isAuthenticated = computed(() => Boolean(session.value && profile.value))
+
+  const role = computed<UserRole | null>(() => profile.value?.role ?? null)
+
+  const isAdmin = computed(() => role.value === 'admin')
+  const isEditor = computed(() => role.value === 'editor')
+
+  const login = async (email: string, password: string): Promise<boolean> => {
+    if (!isSupabaseConfigured()) {
+      authError.value =
+        'Supabase belum dikonfigurasi. Set VITE_SUPABASE_URL dan VITE_SUPABASE_ANON_KEY.'
+      return false
+    }
+    authLoading.value = true
+    authError.value = null
     try {
-      // Di development mode, simulasi login
-      if (process.env.NODE_ENV === 'development') {
-        await new Promise(resolve => setTimeout(resolve, 800)) // Simulate API delay
-        
-        // Hardcoded credentials untuk development
-        if (email === 'admin@example.com' && password === 'admin123') {
-          const dummyToken = 'dummy-jwt-token-' + Date.now()
-          localStorage.setItem('token', dummyToken)
-          token.value = dummyToken
-          isAuthenticated.value = true
-          user.value = {
-            id: 1,
-            name: 'Admin Himpunan',
-            email: 'admin@example.com',
-            role: 'admin',
-            avatar: 'https://via.placeholder.com/150'
-          }
-          return true
-        } else {
-          error.value = 'Email atau password salah'
-          return false
-        }
-      }
-      
-      // Di production, panggil API login
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email, password }),
+      const client = getSupabase()
+      const { data, error: signInError } = await client.auth.signInWithPassword({
+        email,
+        password,
       })
-      
-      const data = await response.json()
-      
-      if (!response.ok) {
-        error.value = data.message || 'Login gagal'
+      if (signInError || !data.session) {
+        authError.value = signInError?.message ?? 'Login gagal.'
         return false
       }
-      
-      localStorage.setItem('token', data.token)
-      token.value = data.token
-      isAuthenticated.value = true
-      user.value = data.user
+      session.value = data.session
+      profile.value = await fetchProfile(data.user.id)
+      // If profile row is missing, the user has authenticated but is not a
+      // pre-provisioned CMS account.
+      if (!profile.value) {
+        authError.value =
+          'Akun tidak memiliki akses CMS. Hubungi administrator.'
+        await client.auth.signOut()
+        session.value = null
+        profile.value = null
+        return false
+      }
       return true
     } catch (err) {
-      console.error('Login error:', err)
-      error.value = 'Terjadi kesalahan saat login'
+      authError.value = err instanceof Error ? err.message : 'Login gagal.'
       return false
     } finally {
-      loading.value = false
+      authLoading.value = false
     }
   }
 
-  // Load user data from API (for production)
-  const loadUserData = async () => {
-    if (!token.value) return
-    
+  const logout = async (): Promise<void> => {
+    if (!isSupabaseConfigured()) {
+      session.value = null
+      profile.value = null
+      return
+    }
     try {
-      const response = await fetch('/api/auth/me', {
-        headers: {
-          'Authorization': `Bearer ${token.value}`
-        }
-      })
-      
-      if (response.ok) {
-        const data = await response.json()
-        user.value = data.user
-      } else {
-        // Token invalid, logout
-        logout()
-      }
-    } catch (err) {
-      console.error('Error loading user data:', err)
+      const client = getSupabase()
+      await client.auth.signOut()
+    } finally {
+      session.value = null
+      profile.value = null
     }
   }
 
-  // Logout function
-  const logout = () => {
-    localStorage.removeItem('token')
-    token.value = null
-    user.value = null
-    isAuthenticated.value = false
+  const refresh = async (): Promise<void> => {
+    await refreshSessionAndProfile()
   }
-
-  // Check auth when composable is first used
-  checkAuth()
 
   return {
+    session: session as UseAuthReturn['session'],
+    profile,
     user,
     isAuthenticated,
-    token,
-    loading,
-    error,
+    role,
+    isAdmin,
+    isEditor,
+    loading: authLoading,
+    error: authError,
     login,
     logout,
-    checkAuth
+    refresh,
   }
-} 
+}

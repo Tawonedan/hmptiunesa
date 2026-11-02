@@ -1,35 +1,72 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import axios from 'axios'
-import { useRouter } from 'vue-router'
+import { getSupabase, isSupabaseConfigured } from '@/lib/supabase'
+import { seedEvents } from '@/mock/seed'
+import type { Event, EventStatus } from '@/types/database'
 
-const router = useRouter()
-const events = ref<any[]>([])
+const events = ref<Event[]>([])
 const isLoading = ref(true)
-const error = ref('')
+const error = ref<string | null>(null)
 
 const isModalOpen = ref(false)
 const modalMode = ref<'add' | 'edit'>('add')
-const currentId = ref('')
+const currentId = ref<string | null>(null)
+const isSubmitting = ref(false)
 
-const formData = ref({
+const form = ref<{
+  title: string
+  slug: string
+  category: string
+  status: EventStatus
+  start_date: string
+  end_date: string
+  location: string
+  summary: string
+  description: string
+  poster_url: string
+  registration_url: string
+  contact_person: string
+  is_published: boolean
+}>({
   title: '',
-  description: '',
-  dateStart: '',
-  dateEnd: '',
-  time: '',
-  location: '',
+  slug: '',
   category: 'general',
-  status: 'upcoming'
+  status: 'upcoming',
+  start_date: '',
+  end_date: '',
+  location: '',
+  summary: '',
+  description: '',
+  poster_url: '',
+  registration_url: '',
+  contact_person: '',
+  is_published: true,
 })
 
 const fetchEvents = async () => {
   isLoading.value = true
+  error.value = null
+
+  if (!isSupabaseConfigured()) {
+    events.value = [...seedEvents]
+    isLoading.value = false
+    return
+  }
+
   try {
-    const response = await axios.get('/api/events?limit=100')
-    events.value = response.data.events || response.data
-  } catch (err: any) {
-    error.value = 'Failed to load data'
+    const client = getSupabase()
+    const { data, error: fetchErr } = await client
+      .from('events')
+      .select('*')
+      .order('start_date', { ascending: false })
+
+    if (fetchErr) {
+      error.value = fetchErr.message
+    } else {
+      events.value = (data as Event[]) || []
+    }
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Gagal memuat kegiatan.'
   } finally {
     isLoading.value = false
   }
@@ -41,27 +78,42 @@ onMounted(() => {
 
 const openAddModal = () => {
   modalMode.value = 'add'
-  formData.value = { title: '', description: '', dateStart: '', dateEnd: '', time: '', location: '', category: 'general', status: 'upcoming' }
+  currentId.value = null
+  form.value = {
+    title: '',
+    slug: '',
+    category: 'workshop',
+    status: 'upcoming',
+    start_date: new Date().toISOString().slice(0, 10),
+    end_date: '',
+    location: '',
+    summary: '',
+    description: '',
+    poster_url: '',
+    registration_url: '',
+    contact_person: '',
+    is_published: true,
+  }
   isModalOpen.value = true
 }
 
-const openEditModal = (evt: any) => {
+const openEditModal = (ev: Event) => {
   modalMode.value = 'edit'
-  currentId.value = evt._id
-  // handle date nested object
-  const startObj = evt.date?.start || evt.date
-  const startDateStr = typeof startObj === 'string' ? startObj.split('T')[0] : 
-                       (startObj && startObj.year) ? `${startObj.year}-${startObj.month === 'Mar' ? '03': '01'}-01` : '' // Simple fallback
-
-  formData.value = { 
-    title: evt.title, 
-    description: evt.description,
-    dateStart: startDateStr,
-    dateEnd: '', // Simplification for demo
-    time: evt.time,
-    location: evt.location,
-    category: evt.category || 'general',
-    status: evt.status || 'upcoming'
+  currentId.value = ev.id
+  form.value = {
+    title: ev.title,
+    slug: ev.slug,
+    category: ev.category,
+    status: ev.status,
+    start_date: ev.start_date ? ev.start_date.slice(0, 10) : '',
+    end_date: ev.end_date ? ev.end_date.slice(0, 10) : '',
+    location: ev.location || '',
+    summary: ev.summary || '',
+    description: ev.description || '',
+    poster_url: ev.poster_url || '',
+    registration_url: ev.registration_url || '',
+    contact_person: ev.contact_person || '',
+    is_published: ev.is_published,
   }
   isModalOpen.value = true
 }
@@ -70,130 +122,279 @@ const closeModal = () => {
   isModalOpen.value = false
 }
 
-const saveEvent = async () => {
-  // Construct body that meets backend expectations
-  const body = {
-    ...formData.value,
-    date: {
-      start: formData.value.dateStart || new Date().toISOString(),
-      end: formData.value.dateEnd || new Date().toISOString()
-    }
-  }
-
-  const token = localStorage.getItem('token')
-  const headers = { Authorization: `Bearer ${token}` }
-
-  try {
-    if (modalMode.value === 'add') {
-      await axios.post('/api/events', body, { headers })
-    } else {
-      await axios.put(`/api/events/${currentId.value}`, body, { headers })
-    }
-    closeModal()
-    fetchEvents()
-  } catch (err: any) {
-    alert('Failed to save data. ' + (err.response?.data?.message || err.message))
+const generateSlug = () => {
+  if (modalMode.value === 'add' && !form.value.slug && form.value.title) {
+    form.value.slug = form.value.title
+      .toLowerCase()
+      .replace(/[^\w\s-]/g, '')
+      .replace(/\s+/g, '-')
   }
 }
 
-const deleteEvent = async (id: string) => {
-  if (confirm('Are you sure you want to delete this event?')) {
-    try {
-      const token = localStorage.getItem('token')
-      await axios.delete(`/api/events/${id}`, { headers: { Authorization: `Bearer ${token}` } })
-      fetchEvents()
-    } catch (err: any) {
-      alert('Failed to delete data. ' + (err.response?.data?.message || err.message))
+const handleSubmit = async () => {
+  isSubmitting.value = true
+  error.value = null
+
+  const payload = {
+    title: form.value.title,
+    slug: form.value.slug || form.value.title.toLowerCase().replace(/\s+/g, '-'),
+    category: form.value.category,
+    status: form.value.status,
+    start_date: form.value.start_date || null,
+    end_date: form.value.end_date || null,
+    location: form.value.location || null,
+    summary: form.value.summary,
+    description: form.value.description || null,
+    poster_url: form.value.poster_url || null,
+    registration_url: form.value.registration_url || null,
+    contact_person: form.value.contact_person || null,
+    is_published: form.value.is_published,
+  }
+
+  if (!isSupabaseConfigured()) {
+    if (modalMode.value === 'add') {
+      const newEv: Event = {
+        ...payload,
+        id: 'mock-' + Date.now(),
+        outcome_notes: null,
+        press_release: null,
+        documentation_images: [],
+        public_documents: [],
+        created_by: null,
+        updated_by: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }
+      events.value.unshift(newEv)
+    } else if (currentId.value) {
+      const idx = events.value.findIndex((e) => e.id === currentId.value)
+      if (idx !== -1) {
+        events.value[idx] = {
+          ...events.value[idx],
+          ...payload,
+          updated_at: new Date().toISOString(),
+        }
+      }
     }
+    isSubmitting.value = false
+    closeModal()
+    return
+  }
+
+  try {
+    const client = getSupabase()
+    if (modalMode.value === 'add') {
+      const { error: insErr } = await client.from('events').insert([payload])
+      if (insErr) throw insErr
+    } else if (currentId.value) {
+      const { error: updErr } = await client.from('events').update(payload).eq('id', currentId.value)
+      if (updErr) throw updErr
+    }
+    await fetchEvents()
+    closeModal()
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Gagal menyimpan kegiatan.'
+  } finally {
+    isSubmitting.value = false
+  }
+}
+
+const togglePublish = async (ev: Event) => {
+  const nextPublished = !ev.is_published
+
+  if (!isSupabaseConfigured()) {
+    ev.is_published = nextPublished
+    return
+  }
+
+  try {
+    const client = getSupabase()
+    const { error: err } = await client
+      .from('events')
+      .update({ is_published: nextPublished })
+      .eq('id', ev.id)
+
+    if (err) throw err
+    ev.is_published = nextPublished
+  } catch (err) {
+    alert(err instanceof Error ? err.message : 'Gagal mengubah status terbit.')
+  }
+}
+
+const deleteEvent = async (ev: Event) => {
+  if (!confirm(`Hapus kegiatan "${ev.title}"?`)) return
+
+  if (!isSupabaseConfigured()) {
+    events.value = events.value.filter((e) => e.id !== ev.id)
+    return
+  }
+
+  try {
+    const client = getSupabase()
+    const { error: delErr } = await client.from('events').delete().eq('id', ev.id)
+    if (delErr) throw delErr
+    events.value = events.value.filter((e) => e.id !== ev.id)
+  } catch (err) {
+    alert(err instanceof Error ? err.message : 'Gagal menghapus kegiatan.')
   }
 }
 </script>
 
 <template>
-  <div class="admin-event-container">
-    <div class="header">
-      <h1 class="page-title">Manage Events</h1>
+  <div class="admin-page">
+    <div class="page-header">
       <div>
-        <button @click="router.push('/admin/dashboard')" class="back-btn mr-2">Back to Dashboard</button>
-        <button @click="openAddModal" class="add-btn">+ Add Event</button>
+        <span class="eyebrow">CMS</span>
+        <h1>Manajemen Kegiatan & Acara</h1>
+        <p class="muted">Kelola kegiatan mendatang, berlangsung, serta arsip dokumentasi publik.</p>
+      </div>
+      <button class="btn btn-primary" @click="openAddModal">
+        + Tambah Kegiatan
+      </button>
+    </div>
+
+    <div v-if="error" class="alert alert-error">{{ error }}</div>
+
+    <div class="card table-card">
+      <div v-if="isLoading" class="loading-state">Memuat kegiatan...</div>
+      <div v-else-if="events.length === 0" class="empty-state">Belum ada kegiatan yang terdaftar.</div>
+      <div v-else class="table-responsive">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Judul Kegiatan</th>
+              <th>Kategori</th>
+              <th>Status</th>
+              <th>Tanggal</th>
+              <th>Lokasi</th>
+              <th>Publikasi</th>
+              <th>Aksi</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="ev in events" :key="ev.id">
+              <td>
+                <strong>{{ ev.title }}</strong>
+                <div class="small muted">{{ ev.slug }}</div>
+              </td>
+              <td><span class="badge badge-accent">{{ ev.category }}</span></td>
+              <td><span :class="['badge', `badge-${ev.status}`]">{{ ev.status }}</span></td>
+              <td class="small">{{ ev.start_date ? ev.start_date.slice(0, 10) : '—' }}</td>
+              <td class="small">{{ ev.location || '—' }}</td>
+              <td>
+                <button
+                  :class="['status-pill', ev.is_published ? 'published' : 'draft']"
+                  @click="togglePublish(ev)"
+                >
+                  {{ ev.is_published ? 'Terbit' : 'Draf' }}
+                </button>
+              </td>
+              <td>
+                <div class="action-buttons">
+                  <button class="btn-icon" title="Edit" @click="openEditModal(ev)">✏️</button>
+                  <button class="btn-icon btn-danger" title="Hapus" @click="deleteEvent(ev)">🗑️</button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </div>
 
-    <div v-if="isLoading">Loading...</div>
-    <div v-else-if="error" class="text-red-500">{{ error }}</div>
-    <div v-else class="table-wrapper">
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th>Title</th>
-            <th>Location</th>
-            <th>Category</th>
-            <th>Status</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="evt in events" :key="evt._id">
-            <td>{{ evt.title }}</td>
-            <td>{{ evt.location }}</td>
-            <td>{{ evt.category }}</td>
-            <td>{{ evt.status }}</td>
-            <td>
-              <button @click="openEditModal(evt)" class="edit-btn">Edit</button>
-              <button @click="deleteEvent(evt._id)" class="delete-btn">Delete</button>
-            </td>
-          </tr>
-          <tr v-if="events.length === 0">
-            <td colspan="5" class="text-center">No data found</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+    <!-- Modal Form -->
+    <div v-if="isModalOpen" class="modal-backdrop" @click.self="closeModal">
+      <div class="modal card">
+        <div class="modal-header">
+          <h2>{{ modalMode === 'add' ? 'Tambah Kegiatan Baru' : 'Edit Kegiatan' }}</h2>
+          <button class="close-btn" @click="closeModal">&times;</button>
+        </div>
 
-    <!-- Modal -->
-    <div v-if="isModalOpen" class="modal-overlay">
-      <div class="modal-content">
-        <h2>{{ modalMode === 'add' ? 'Add New Event' : 'Edit Event' }}</h2>
-        <form @submit.prevent="saveEvent">
-          <div class="form-group">
-            <label>Title</label>
-            <input v-model="formData.title" required />
+        <form @submit.prevent="handleSubmit">
+          <div class="form-grid">
+            <div class="field field-full">
+              <label>Judul Kegiatan *</label>
+              <input v-model="form.title" type="text" required @blur="generateSlug" />
+            </div>
+
+            <div class="field">
+              <label>Slug URL *</label>
+              <input v-model="form.slug" type="text" required />
+            </div>
+
+            <div class="field">
+              <label>Kategori</label>
+              <select v-model="form.category">
+                <option value="workshop">Workshop</option>
+                <option value="seminar">Seminar</option>
+                <option value="competition">Kompetisi</option>
+                <option value="social">Sosial / Pengabdian</option>
+                <option value="general">Umum</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label>Status</label>
+              <select v-model="form.status">
+                <option value="upcoming">Mendatang (Upcoming)</option>
+                <option value="ongoing">Sedang Berlangsung (Ongoing)</option>
+                <option value="completed">Selesai / Arsip (Completed)</option>
+                <option value="cancelled">Dibatalkan (Cancelled)</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label>Tanggal Mulai</label>
+              <input v-model="form.start_date" type="date" />
+            </div>
+
+            <div class="field">
+              <label>Tanggal Selesai</label>
+              <input v-model="form.end_date" type="date" />
+            </div>
+
+            <div class="field field-full">
+              <label>Lokasi Pelaksanaan</label>
+              <input v-model="form.location" type="text" placeholder="Misal: Gedung A9 / Zoom Meeting" />
+            </div>
+
+            <div class="field field-full">
+              <label>Ringkasan Singkat *</label>
+              <textarea v-model="form.summary" rows="2" required></textarea>
+            </div>
+
+            <div class="field field-full">
+              <label>Deskripsi Lengkap</label>
+              <textarea v-model="form.description" rows="4"></textarea>
+            </div>
+
+            <div class="field">
+              <label>URL Poster Kegiatan</label>
+              <input v-model="form.poster_url" type="url" placeholder="https://..." />
+            </div>
+
+            <div class="field">
+              <label>URL Pendaftaran</label>
+              <input v-model="form.registration_url" type="url" placeholder="https://forms.gle/..." />
+            </div>
+
+            <div class="field field-full">
+              <label>Kontak Penanggung Jawab</label>
+              <input v-model="form.contact_person" type="text" placeholder="08123456789 (Humas)" />
+            </div>
+
+            <div class="field field-full checkbox-field">
+              <label>
+                <input v-model="form.is_published" type="checkbox" />
+                Langsung terbitkan di portal publik
+              </label>
+            </div>
           </div>
-          <div class="form-group">
-            <label>Description</label>
-            <textarea v-model="formData.description" required></textarea>
-          </div>
-          <div class="form-group">
-            <label>Location</label>
-            <input v-model="formData.location" required />
-          </div>
-          <div class="form-group">
-            <label>Start Date</label>
-            <input type="date" v-model="formData.dateStart" required />
-          </div>
-          <div class="form-group">
-            <label>Time</label>
-            <input v-model="formData.time" required />
-          </div>
-          <div class="form-group">
-            <label>Category</label>
-            <select v-model="formData.category">
-              <option value="seminar">Seminar</option>
-              <option value="workshop">Workshop</option>
-              <option value="general">General</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label>Status</label>
-            <select v-model="formData.status">
-              <option value="upcoming">Upcoming</option>
-              <option value="ongoing">Ongoing</option>
-              <option value="completed">Completed</option>
-            </select>
-          </div>
-          <div class="modal-actions">
-            <button type="button" @click="closeModal" class="cancel-btn">Cancel</button>
-            <button type="submit" class="save-btn">Save</button>
+
+          <div class="modal-footer">
+            <button type="button" class="btn btn-outline" @click="closeModal">Batal</button>
+            <button type="submit" class="btn btn-primary" :disabled="isSubmitting">
+              {{ isSubmitting ? 'Menyimpan…' : 'Simpan Kegiatan' }}
+            </button>
           </div>
         </form>
       </div>
@@ -202,29 +403,193 @@ const deleteEvent = async (id: string) => {
 </template>
 
 <style scoped>
-.admin-event-container { padding: 2rem; background-color: #f9fafb; min-height: 100vh; }
-.header { display: flex; justify-content: space-between; margin-bottom: 2rem; }
-.page-title { font-size: 1.5rem; font-weight: 700; }
-button { cursor: pointer; padding: 0.5rem 1rem; border-radius: 0.25rem; border: none; font-weight: 600; }
-.back-btn { background-color: #6b7280; color: white; margin-right: 0.5rem; }
-.add-btn { background-color: #10b981; color: white; }
-.edit-btn { background-color: #3b82f6; color: white; margin-right: 0.5rem; }
-.delete-btn { background-color: #ef4444; color: white; }
-.table-wrapper { background: white; border-radius: 0.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); overflow: hidden; }
-.data-table { width: 100%; border-collapse: collapse; }
-.data-table th, .data-table td { padding: 1rem; text-align: left; border-bottom: 1px solid #e5e7eb; }
-.data-table th { background-color: #f3f4f6; font-weight: 600; }
-.text-center { text-align: center; }
-.mr-2 { margin-right: 0.5rem; }
+.admin-page {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
 
-/* Modal Styles */
-.modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 50; }
-.modal-content { background: white; padding: 2rem; border-radius: 0.5rem; width: 100%; max-width: 500px; max-height: 90vh; overflow-y: auto; }
-.modal-content h2 { margin-bottom: 1.5rem; }
-.form-group { margin-bottom: 1rem; }
-.form-group label { display: block; margin-bottom: 0.5rem; font-weight: 500; }
-.form-group input, .form-group textarea, .form-group select { width: 100%; padding: 0.5rem; border: 1px solid #d1d5db; border-radius: 0.25rem; }
-.modal-actions { display: flex; justify-content: flex-end; gap: 1rem; margin-top: 1.5rem; }
-.cancel-btn { background-color: #e5e7eb; color: #374151; }
-.save-btn { background-color: #2563eb; color: white; }
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.page-header h1 {
+  font-size: 1.75rem;
+  margin: 0.25rem 0;
+  color: var(--brand-primary);
+}
+
+.table-card {
+  padding: 0;
+  overflow: hidden;
+}
+
+.table-responsive {
+  overflow-x: auto;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.data-table th,
+.data-table td {
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.data-table th {
+  background: var(--surface-muted);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+}
+
+.status-pill {
+  padding: 0.25rem 0.65rem;
+  border-radius: var(--radius-pill);
+  font-size: 0.75rem;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+}
+
+.status-pill.published {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.status-pill.draft {
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.btn-icon {
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 0.35rem 0.5rem;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.btn-icon:hover {
+  background: var(--surface-muted);
+}
+
+.btn-danger:hover {
+  background: #fee2e2;
+  border-color: #fca5a5;
+}
+
+.loading-state,
+.empty-state {
+  padding: 3rem;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+/* Modal */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 37, 64, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  padding: 1.5rem;
+}
+
+.modal {
+  width: 100%;
+  max-width: 680px;
+  max-height: 90vh;
+  overflow-y: auto;
+  background: var(--surface-card);
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.5rem;
+}
+
+.modal-header h2 {
+  font-size: 1.25rem;
+  margin: 0;
+}
+
+.close-btn {
+  background: transparent;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  color: var(--text-muted);
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.field-full {
+  grid-column: 1 / -1;
+}
+
+.field label {
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.field input,
+.field select,
+.field textarea {
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  font-family: inherit;
+  font-size: 0.9rem;
+}
+
+.checkbox-field label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+}
+
+.modal-footer {
+  margin-top: 1.5rem;
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+
+@media (max-width: 640px) {
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+}
 </style>

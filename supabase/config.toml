@@ -1,0 +1,43 @@
+# Supabase local development configuration
+# Run `supabase start` to boot local stack
+# Run `supabase db push` to apply migrations
+# Run `supabase functions serve` to serve Edge Functions locally
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+shadow_port = 54320
+major_version = 15
+
+[studio]
+enabled = true
+port = 54323
+
+[inbucket]
+enabled = true
+port = 54324
+
+[storage]
+enabled = true
+file_size_limit = "5MiB"
+
+[auth]
+enabled = true
+site_url = "http://localhost:5173"
+# Disable all public sign-up — CMS accounts are pre-provisioned only
+enable_signup = false
+jwt_expiry = 3600
+
+[auth.email]
+enable_signup = false
+enable_confirmations = false
+
+[functions]
+# Deno runtime for Edge Functions
+verify_jwt = false

@@ -1,152 +1,150 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
 
 const router = useRouter()
-const username = ref('')
-const password = ref('')
-const error = ref('')
+const authStore = useAuthStore()
 
-const handleLogin = () => {
-  // Demo credentials (in production, use proper authentication)
-  if (username.value === 'admin' && password.value === 'hmptiunesa2025') {
-    localStorage.setItem('adminLoggedIn', 'true')
-    router.push('/admin/dashboard')
-  } else {
-    error.value = 'Username atau password salah'
+// Form state
+const form = reactive({
+  email: '',
+  password: '',
+})
+
+const submitting = ref(false)
+const submitted = ref(false)
+const submitError = ref<string | null>(null)
+
+// Login handler
+const handleLogin = async () => {
+  submitError.value = null
+  submitted.value = false
+  submitting.value = true
+
+  try {
+    const success = await authStore.login(form.email, form.password)
+    if (success) {
+      submitted.value = true
+      // Redirect to previous page or dashboard
+      const from = router.currentRoute.value.query.redirect as string | null
+      const target = from ? `/${from}` : '/admin/dashboard'
+      router.push(target)
+    }
+  } catch (err) {
+    submitError.value = err instanceof Error ? err.message : 'Login gagal.'
+  } finally {
+    submitting.value = false
   }
 }
 </script>
 
 <template>
-  <div class="login-container">
-    <div class="login-box">
-      <div class="header">
-        <h2 class="title">Login Admin</h2>
-        <p class="subtitle">Sistem Manajemen Website Himpunan</p>
-      </div>
-      
-      <div v-if="error" class="error-alert">
-        {{ error }}
-      </div>
-      
-      <form @submit.prevent="handleLogin">
-        <div class="form-group">
-          <label for="username">Username</label>
-          <input
-            id="username"
-            type="text"
-            v-model="username"
-            required
-            class="form-input"
-          />
+  <section class="hero-band">
+    <div class="container">
+      <span class="eyebrow">Admin</span>
+      <h1>Masuk ke CMS</h1>
+      <p class="hero-lead">
+        Silakan login untuk mengakses panel administrasi HMPTI.
+      </p>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="container">
+      <form class="card contact-form" @submit.prevent="handleLogin">
+        <h2>Login Admin</h2>
+        <p class="muted">
+          Masuk dengan akun CMS untuk mengelola website HMPTI.
+        </p>
+
+        <div v-if="submitError" class="alert error">{{ submitError }}</div>
+        <div v-else-if="submitted" class="alert success">
+          Login berhasil! Sedang memuat dashboard...
         </div>
-        
-        <div class="form-group">
-          <label for="password">Password</label>
-          <input
-            id="password"
-            type="password"
-            v-model="password"
-            required
-            class="form-input"
-          />
+
+        <div class="field">
+          <span>Email</span>
+          <input v-model="form.email" type="email" required />
         </div>
-        
-        <button type="submit" class="submit-btn">
-          Masuk
+        <div class="field">
+          <span>Password</span>
+          <input v-model="form.password" type="password" required />
+        </div>
+
+        <button
+          type="submit"
+          class="btn btn-primary"
+          :disabled="submitting"
+        >
+          {{ submitting ? 'Mengirim…' : 'Masuk' }}
         </button>
       </form>
     </div>
-  </div>
+  </section>
 </template>
 
 <style scoped>
-.login-container {
-  min-height: 100vh;
-  background-color: #f3f4f6; /* gray-100 */
+.hero-band {
+  padding: 5rem 0 3rem;
+  background: var(--brand-primary);
+  color: var(--text-on-brand);
+}
+.hero-band h1 {
+  font-size: clamp(2rem, 5vw, 3rem);
+  font-weight: 800;
+  margin: 0.5rem 0 0.75rem;
+  color: var(--text-on-brand);
+}
+.hero-lead {
+  max-width: 600px;
+  color: rgba(255, 255, 255, 0.85);
+}
+.contact-form h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1.3rem;
+  color: var(--brand-primary);
+}
+.field {
   display: flex;
-  align-items: center;
-  justify-content: center;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-top: 1rem;
 }
-
-.login-box {
-  background-color: white;
-  padding: 2rem;
-  border-radius: 0.5rem;
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-  width: 100%;
-  max-width: 28rem;
+.field span {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
 }
-
-.header {
-  text-align: center;
-  margin-bottom: 1.5rem;
+.field input {
+  padding: 0.65rem 0.85rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-strong);
+  font-family: inherit;
+  font-size: 0.95rem;
+  background: var(--surface-card);
+  color: var(--text-primary);
+  transition: border-color 0.15s ease;
 }
-
-.title {
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: #111827; /* gray-900 */
+.field input:focus {
+  outline: none;
+  border-color: var(--brand-accent);
+  box-shadow: 0 0 0 3px rgba(59, 108, 244, 0.15);
 }
-
-.subtitle {
-  color: #4b5563; /* gray-600 */
-}
-
-.error-alert {
-  background-color: #fee2e2; /* red-100 */
-  border: 1px solid #f87171; /* red-400 */
-  color: #b91c1c; /* red-700 */
+.alert {
+  margin-top: 1rem;
   padding: 0.75rem 1rem;
-  border-radius: 0.25rem;
-  margin-bottom: 1rem;
+  border-radius: var(--radius-md);
+  font-size: 0.9rem;
 }
-
-.form-group {
-  margin-bottom: 1rem;
-  text-align: left; /* Ensure labels align left */
+.alert.error {
+  background: #fef2f2;
+  color: #dc2626;
+  border: 1px solid #fecaca;
 }
-
-.form-group:last-of-type {
-  margin-bottom: 1.5rem;
-}
-
-label {
-  display: block;
-  color: #374151; /* gray-700 */
-  font-size: 0.875rem;
-  font-weight: 700;
-  margin-bottom: 0.5rem;
-}
-
-.form-input {
-  width: 100%;
-  padding: 0.5rem 0.75rem;
-  border: 1px solid #d1d5db; /* gray-300 */
-  border-radius: 0.375rem;
-  outline: none;
-}
-
-.form-input:focus {
-  outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.5); /* blue-500 with opacity */
-}
-
-.submit-btn {
-  width: 100%;
-  background-color: #3b82f6; /* blue-500 */
-  color: white;
-  font-weight: 700;
-  padding: 0.5rem 1rem;
-  border-radius: 0.375rem;
-  border: none;
-  cursor: pointer;
-  transition: background-color 0.2s;
-}
-
-.submit-btn:hover {
-  background-color: #2563eb; /* blue-600 */
+.alert.success {
+  background: #f0fdf4;
+  color: #16a34a;
+  border: 1px solid #bbf7d0;
 }
 </style>

@@ -1,143 +1,90 @@
 <script setup lang="ts">
-import { RouterLink, RouterView, useRouter, useRoute } from 'vue-router'
-import { ref, onMounted, computed, onBeforeUnmount } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { RouterLink, RouterView, useRoute } from 'vue-router'
+
+import { useSiteSettings } from '@/composables/useSiteSettings'
+import { primaryNavLinks } from '@/config/site'
 
 const route = useRoute()
-const router = useRouter()
+const { settings, organizationAbbr, cabinetName, tagline, socialLinks } = useSiteSettings()
+
+const isAdminRoute = computed(() => route.path.startsWith('/admin'))
 const isMenuOpen = ref(false)
 
-// User State
-const isLoggedIn = ref(false)
-const currentUser = ref<any>(null)
-const isUserDropdownOpen = ref(false)
-
-// Check if current route is admin route
-const isAdminRoute = computed(() => {
-  return route.path.startsWith('/admin')
-})
-
-// Fungsi untuk memeriksa status login
-const checkLoginStatus = () => {
-  const token = localStorage.getItem('token')
-  const userStr = localStorage.getItem('user')
-  
-  if (token && userStr) {
-    isLoggedIn.value = true
-    try {
-      currentUser.value = JSON.parse(userStr)
-    } catch (e) {
-      currentUser.value = { nama: 'User' }
-    }
-  } else {
-    isLoggedIn.value = false
-    currentUser.value = null
-  }
-}
-
-// Fungsi untuk toggle menu mobile
-const toggleMenu = () => {
+const toggleMenu = (): void => {
   isMenuOpen.value = !isMenuOpen.value
   document.body.style.overflow = isMenuOpen.value ? 'hidden' : ''
 }
 
-// Fungsi untuk menutup menu saat klik link
-const closeMenu = () => {
+const closeMenu = (): void => {
   isMenuOpen.value = false
   document.body.style.overflow = ''
 }
 
-// User Dropdown Functions
-const toggleUserDropdown = () => {
-  isUserDropdownOpen.value = !isUserDropdownOpen.value
-}
+const currentYear = new Date().getFullYear()
 
-const closeUserDropdown = () => {
-  isUserDropdownOpen.value = false
-}
-
-const handleLogout = () => {
-  localStorage.removeItem('token')
-  localStorage.removeItem('user')
-  localStorage.removeItem('isLoggedIn')
-  
-  isLoggedIn.value = false
-  currentUser.value = null
-  isUserDropdownOpen.value = false
-  
-  router.push('/login')
-}
-
-// Listen for storage events (login from other tabs or components)
-const handleStorageChange = () => {
-  checkLoginStatus()
+// Close mobile menu on route change
+const stopRouteWatch = () => {
+  // noop; route is reactive so we just close when path changes via watch below
 }
 
 onMounted(() => {
-  checkLoginStatus()
-  window.addEventListener('storage', handleStorageChange)
-  // Close dropdown when clicking outside
-  document.addEventListener('click', (e: any) => {
-    if (!e.target.closest('.user-dropdown')) {
-      isUserDropdownOpen.value = false
-    }
-  })
+  // Auto-close drawer whenever navigation happens
+  const unwatch = () => closeMenu()
+  // Use a small reactive subscription via the route object
+  // (vue-router does not expose watch here; we use a click delegation fallback)
+  document.addEventListener('click', unwatch)
+  onBeforeUnmount(() => document.removeEventListener('click', unwatch))
 })
 
 onBeforeUnmount(() => {
-  window.removeEventListener('storage', handleStorageChange)
-  document.removeEventListener('click', () => {})
+  document.body.style.overflow = ''
+  stopRouteWatch()
+})
+
+const socialItems = computed(() => {
+  const s = socialLinks.value
+  const items: { label: string; href: string; icon: string }[] = []
+  if (s.instagram) items.push({ label: 'Instagram', href: s.instagram, icon: 'instagram' })
+  if (s.linkedin) items.push({ label: 'LinkedIn', href: s.linkedin, icon: 'linkedin' })
+  if (s.youtube) items.push({ label: 'YouTube', href: s.youtube, icon: 'youtube' })
+  if (s.github) items.push({ label: 'GitHub', href: s.github, icon: 'github' })
+  if (s.tiktok) items.push({ label: 'TikTok', href: s.tiktok, icon: 'tiktok' })
+  return items
 })
 </script>
 
 <template>
-  <div class="app-container">
-    <!-- Navbar - Sembunyikan pada rute admin -->
-    <header class="navbar" v-if="!isAdminRoute">
-      <a href="/" class="navbar-logo" style="text-decoration: none">
-        <img alt="Logo HIMTI" class="logo" src="@/assets/logo.svg" width="40" height="40" />
-        <div class="logo-text">HMP TI UNESA</div>
-      </a>
-
-      <!-- Desktop Navigation -->
-      <nav class="navbar-links desktop-menu">
-        <RouterLink to="/">Beranda</RouterLink>
-        <RouterLink to="/profil">Profil</RouterLink>
-        <RouterLink to="/fungsionaris">Fungsionaris</RouterLink>
-        <RouterLink to="/anggota">Anggota</RouterLink>
-        <RouterLink to="/dosen">Dosen</RouterLink>
-        <RouterLink to="/kegiatan">Kegiatan</RouterLink>
-        <RouterLink to="/projects">Proyek</RouterLink>
-        <RouterLink to="/galeri">Galeri</RouterLink>
-        <RouterLink to="/berita">Berita</RouterLink>
-      </nav>
-
-      <div class="navbar-right">
-        <!-- Login Button (Visible when NOT logged in) -->
-        <RouterLink v-if="!isLoggedIn" to="/login" class="login-btn">Login</RouterLink>
-        
-        <!-- User Dropdown (Visible when logged in) -->
-        <div v-else class="user-dropdown">
-          <button class="user-btn" @click.stop="toggleUserDropdown">
-            <span class="user-name">{{ currentUser?.nama || 'Pengguna' }}</span>
-            <span class="dropdown-icon" :class="{ 'rotated': isUserDropdownOpen }">▼</span>
-          </button>
-          
-          <div class="dropdown-menu" :class="{ 'show': isUserDropdownOpen }">
-            <RouterLink to="/user/dashboard" class="dropdown-item" @click="closeUserDropdown">
-              <span class="icon">👤</span> Profil
-            </RouterLink>
-            <button class="dropdown-item logout" @click="handleLogout">
-              <span class="icon">🚪</span> Keluar
-            </button>
+  <div class="app-shell">
+    <!-- Public Header (hidden on /admin/*) -->
+    <header v-if="!isAdminRoute" class="public-header">
+      <div class="container header-inner">
+        <RouterLink to="/" class="brand" @click="closeMenu">
+          <img alt="Logo HMPTI" class="brand-logo" src="@/assets/logo.svg" />
+          <div class="brand-text">
+            <strong>{{ organizationAbbr }}</strong>
+            <span>{{ cabinetName }}</span>
           </div>
-        </div>
-        
-        <!-- Hamburger Menu Button -->
+        </RouterLink>
+
+        <nav class="primary-nav" aria-label="Navigasi utama">
+          <RouterLink
+            v-for="link in primaryNavLinks"
+            :key="link.to"
+            :to="link.to"
+            class="nav-link"
+            active-class="is-active"
+            exact-active-class="is-exact"
+          >
+            {{ link.label }}
+          </RouterLink>
+        </nav>
+
         <button
-          class="hamburger-btn"
-          @click="toggleMenu"
+          class="hamburger"
           :class="{ 'is-active': isMenuOpen }"
-          aria-label="Menu"
+          aria-label="Buka menu"
+          @click.stop="toggleMenu"
         >
           <span></span>
           <span></span>
@@ -145,972 +92,385 @@ onBeforeUnmount(() => {
         </button>
       </div>
 
-      <!-- Mobile Navigation Menu -->
-      <div class="mobile-menu" :class="{ 'is-open': isMenuOpen }">
-        <nav class="mobile-nav">
-          <RouterLink @click="closeMenu" to="/">Beranda</RouterLink>
-          <RouterLink @click="closeMenu" to="/profil">Profil</RouterLink>
-          <RouterLink @click="closeMenu" to="/fungsionaris">Fungsionaris</RouterLink>
-          <RouterLink @click="closeMenu" to="/anggota">Anggota</RouterLink>
-          <RouterLink @click="closeMenu" to="/dosen">Dosen</RouterLink>
-          <RouterLink @click="closeMenu" to="/kegiatan">Kegiatan</RouterLink>
-          <RouterLink @click="closeMenu" to="/projects">Proyek</RouterLink>
-          <RouterLink @click="closeMenu" to="/galeri">Galeri</RouterLink>
-          <RouterLink @click="closeMenu" to="/berita">Berita</RouterLink>
-        </nav>
-      </div>
+      <!-- Mobile drawer -->
+      <div class="drawer-backdrop" :class="{ 'is-open': isMenuOpen }" @click="closeMenu"></div>
+      <aside class="drawer" :class="{ 'is-open': isMenuOpen }" aria-label="Menu mobile">
+        <RouterLink
+          v-for="link in primaryNavLinks"
+          :key="link.to"
+          :to="link.to"
+          class="drawer-link"
+          @click="closeMenu"
+        >
+          {{ link.label }}
+        </RouterLink>
+      </aside>
     </header>
 
-    <!-- Tambahkan padding top hanya untuk halaman non-admin -->
-    <main :class="{ 'main-with-navbar': !isAdminRoute }">
+    <main :class="['public-main', { 'with-nav': !isAdminRoute }]">
       <RouterView />
     </main>
 
-    <!-- Footer - Sembunyikan pada rute admin -->
-    <footer class="full-width-footer" v-if="!isAdminRoute">
-      <div class="footer-container">
-        <div class="footer-main">
-          <div class="footer-brand">
-            <div class="footer-logo">
-              <img alt="Logo HIMTI" src="@/assets/logo.svg" width="50" height="50" />
-              <h3>Himpunan Mahasiswa<br />Prodi Teknik Informatika<br />UNESA</h3>
-            </div>
-            <p class="footer-tagline">Berdaya, Berkarya, dan Bermanfaat</p>
+    <!-- Public Footer (hidden on /admin/*) -->
+    <footer v-if="!isAdminRoute" class="public-footer">
+      <div class="container footer-grid">
+        <div class="footer-brand">
+          <div class="footer-brand-row">
+            <img alt="Logo HMPTI" class="footer-logo" src="@/assets/logo.svg" />
+            <h3>{{ settings.organization_name }}</h3>
           </div>
-
-          <div class="footer-links">
-            <div class="footer-section">
-              <h4>Navigasi</h4>
-              <div class="footer-nav">
-                <RouterLink to="/">Beranda</RouterLink>
-                <RouterLink to="/profil">Profil</RouterLink>
-                <RouterLink to="/kegiatan">Kegiatan</RouterLink>
-                <RouterLink to="/projects">Proyek</RouterLink>
-                <RouterLink to="/galeri">Galeri</RouterLink>
-                <RouterLink to="/berita">Berita</RouterLink>
-              </div>
-            </div>
-
-            <div class="footer-section">
-              <h4>Organisasi</h4>
-              <div class="footer-nav">
-                <RouterLink to="/fungsionaris">Fungsionaris</RouterLink>
-                <RouterLink to="/anggota">Anggota</RouterLink>
-                <RouterLink to="/dosen">Dosen</RouterLink>
-              </div>
-            </div>
-
-            <div class="footer-section">
-              <h4>Kontak Kami</h4>
-              <address class="contact-info">
-                <div class="contact-item">
-                  <i class="contact-icon">
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="20"
-                      height="20"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="#00A0E3"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    >
-                      <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
-                      <circle cx="12" cy="10" r="3"></circle>
-                    </svg>
-                  </i>
-                  <span>Gedung A10 Jurusan Teknik Informatika<br />Kampus Ketintang, Surabaya</span>
-                </div>
-                <div class="contact-item">
-                  <i class="contact-icon">
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="20"
-                      height="20"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="#00A0E3"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    >
-                      <path
-                        d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"
-                      ></path>
-                      <polyline points="22,6 12,13 2,6"></polyline>
-                    </svg>
-                  </i>
-                  <a href="mailto:himati.unesa@gmail.com">himati.unesa@gmail.com</a>
-                </div>
-                <div class="contact-item">
-                  <i class="contact-icon">
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="20"
-                      height="20"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="#00A0E3"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    >
-                      <path
-                        d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"
-                      ></path>
-                    </svg>
-                  </i>
-                  <a href="tel:+6281585616615">+62 815-8561-6615</a>
-                </div>
-              </address>
-            </div>
-          </div>
+          <p class="footer-tagline" v-if="tagline">"{{ tagline }}"</p>
+          <p class="footer-address" v-if="settings.secretariat_address">
+            {{ settings.secretariat_address }}
+          </p>
         </div>
 
-        <div class="footer-social">
-          <h4>Ikuti Kami</h4>
-          <div class="social-icons">
-            <a href="https://instagram.com/hmpti.unesa" target="_blank" aria-label="Instagram">
-              <div class="social-icon instagram">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="18"
-                  height="18"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect>
-                  <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path>
-                  <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line>
-                </svg>
-              </div>
-            </a>
-            <a href="https://twitter.com/himtiunesa" target="_blank" aria-label="Twitter">
-              <div class="social-icon twitter">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="18"
-                  height="18"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <path
-                    d="M22 4s-.7 2.1-2 3.4c1.6 10-9.4 17.3-18 11.6 2.2.1 4.4-.6 6-2C3 15.5.5 9.6 3 5c2.2 2.6 5.6 4.1 9 4-.9-4.2 4-6.6 7-3.8 1.1 0 3-1.2 3-1.2z"
-                  ></path>
-                </svg>
-              </div>
-            </a>
-            <a href="https://youtube.com/himtiunesa" target="_blank" aria-label="YouTube">
-              <div class="social-icon youtube">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="18"
-                  height="18"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <path
-                    d="M22.54 6.42a2.78 2.78 0 0 0-1.94-2C18.88 4 12 4 12 4s-6.88 0-8.6.46a2.78 2.78 0 0 0-1.94 2A29 29 0 0 0 1 11.75a29 29 0 0 0 .46 5.33A2.78 2.78 0 0 0 3.4 19c1.72.46 8.6.46 8.6.46s6.88 0 8.6-.46a2.78 2.78 0 0 0 1.94-2 29 29 0 0 0 .46-5.25 29 29 0 0 0-.46-5.33z"
-                  ></path>
-                  <polygon points="9.75 15.02 15.5 11.75 9.75 8.48 9.75 15.02"></polygon>
-                </svg>
-              </div>
-            </a>
-            <a href="#" target="_blank" aria-label="LinkedIn">
-              <div class="social-icon linkedin">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="18"
-                  height="18"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <path
-                    d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"
-                  ></path>
-                  <rect x="2" y="9" width="4" height="12"></rect>
-                  <circle cx="4" cy="4" r="2"></circle>
-                </svg>
-              </div>
+        <div class="footer-col">
+          <h4>Navigasi</h4>
+          <ul>
+            <li v-for="link in primaryNavLinks" :key="link.to">
+              <RouterLink :to="link.to">{{ link.label }}</RouterLink>
+            </li>
+          </ul>
+        </div>
+
+        <div class="footer-col">
+          <h4>Kontak</h4>
+          <ul class="contact-list">
+            <li v-if="settings.contact_email">
+              <span class="muted">Email</span>
+              <a :href="`mailto:${settings.contact_email}`">{{ settings.contact_email }}</a>
+            </li>
+            <li v-if="socialLinks.email && socialLinks.email !== settings.contact_email">
+              <span class="muted">Email Alt.</span>
+              <a :href="`mailto:${socialLinks.email}`">{{ socialLinks.email }}</a>
+            </li>
+          </ul>
+
+          <div v-if="socialItems.length" class="social-row">
+            <a
+              v-for="s in socialItems"
+              :key="s.icon"
+              :href="s.href"
+              target="_blank"
+              rel="noopener"
+              :aria-label="s.label"
+              :title="s.label"
+              class="social-chip"
+            >
+              {{ s.label[0] }}
             </a>
           </div>
         </div>
       </div>
 
       <div class="footer-bottom">
-        <div class="copyright">
-          <p>&copy; 2025 Himpunan Mahasiswa Prodi Teknik Informatika UNESA.</p>
-          <p>All rights reserved.</p>
+        <div class="container">
+          <span>© {{ currentYear }} {{ settings.organization_name }}.</span>
+          <span class="muted">All rights reserved.</span>
         </div>
       </div>
     </footer>
   </div>
 </template>
 
-<style>
-/* Override CSS global */
-#app {
-  max-width: 100% !important;
-  padding: 0 !important;
-  margin: 0 !important;
-  background-color: var(--background-light) !important;
-}
-
-body {
-  display: block !important;
-  min-height: 100vh !important;
-  margin: 0 !important;
-  background-color: var(--background-light) !important;
-  color: var(--text-color) !important;
-}
-
-:root {
-  --primary-color: #0064ac;
-  --primary-hover: #0056a1;
-  --secondary-color: #00a0e3;
-  --accent-color: #ff4500;
-  --text-color: #333333;
-  --text-light: #666666;
-  --background-light: #f5f7fa;
-  --background-dark: #0f172a;
-  --white: #ffffff;
-  --border-color: #eeeeee;
-  --shadow-color: rgba(0, 0, 0, 0.1);
-}
-
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
-
-a {
-  text-decoration: none;
-  color: inherit;
-}
-
-.app-container {
+<style scoped>
+.app-shell {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  width: 100%;
-  max-width: 100%;
-  overflow-x: hidden;
 }
 
-/* Main content with navbar padding */
-.main-with-navbar {
-  padding-top: 70px;
+.public-main {
+  flex: 1;
+}
+.public-main.with-nav {
+  padding-top: var(--nav-height);
 }
 
-/* Navbar Styling */
-.navbar {
+/* ── Header ────────────────────────────────────────────────────────────── */
+
+.public-header {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
-  height: 70px;
+  height: var(--nav-height);
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: saturate(180%) blur(14px);
+  -webkit-backdrop-filter: saturate(180%) blur(14px);
+  border-bottom: 1px solid var(--border-subtle);
+  z-index: 50;
+}
+.header-inner {
+  height: 100%;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 2rem;
-  background-color: var(--white);
-  border-bottom: 1px solid var(--border-color);
-  box-shadow: 0 2px 4px var(--shadow-color);
-  z-index: 1000;
-  width: 100%;
 }
-
-.navbar-logo {
-  display: flex;
-  align-items: center;
-}
-
-.logo {
-  margin-right: 0.75rem;
-}
-
-.logo-text {
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: var(--primary-color);
-}
-
-.navbar-links {
-  display: flex;
-}
-
-.navbar-links a {
-  margin: 0 0.75rem;
-  padding: 0.5rem 0;
-  font-weight: 500;
-  color: var(--text-color);
-  position: relative;
-}
-
-.navbar-links a.router-link-active::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: -1px;
-  height: 2px;
-  background-color: var(--primary-color);
-}
-
-.navbar-right {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-
-.login-btn {
-  padding: 0.5rem 1.25rem;
-  background-color: var(--primary-color);
-  color: white !important;
-  border-radius: 2rem;
-  font-weight: 600;
-  font-size: 0.95rem;
-  transition: all 0.3s ease;
-  border: 2px solid transparent;
-}
-
-.login-btn:hover {
-  background-color: transparent;
-  color: var(--primary-color) !important;
-  border-color: var(--primary-color);
-  transform: translateY(-2px);
-  box-shadow: 0 4px 6px rgba(0, 100, 172, 0.2);
-}
-
-/* User Dropdown */
-.user-dropdown {
-  position: relative;
-}
-
-.user-btn {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  background: transparent;
-  border: 1px solid transparent;
-  padding: 0.5rem 1rem;
-  border-radius: 2rem;
-  cursor: pointer;
-  color: var(--text-color);
-  font-weight: 600;
-  transition: all 0.2s ease;
-}
-
-.user-btn:hover {
-  background-color: #f8fafc;
-  border-color: #e2e8f0;
-}
-
-.user-name {
-  max-width: 150px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.dropdown-icon {
-  font-size: 0.8rem;
-  transition: transform 0.2s ease;
-  color: #94a3b8;
-}
-
-.dropdown-icon.rotated {
-  transform: rotate(180deg);
-}
-
-.dropdown-menu {
-  position: absolute;
-  top: 120%;
-  right: 0;
-  width: 200px;
-  background-color: white;
-  border-radius: 0.75rem;
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-  border: 1px solid #e2e8f0;
-  padding: 0.5rem;
-  opacity: 0;
-  visibility: hidden;
-  transform: translateY(-10px);
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-  z-index: 1002;
-}
-
-.dropdown-menu.show {
-  opacity: 1;
-  visibility: visible;
-  transform: translateY(0);
-}
-
-.dropdown-item {
+.brand {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  width: 100%;
-  padding: 0.75rem 1rem;
-  color: var(--text-color);
-  font-size: 0.95rem;
-  text-align: left;
-  background: transparent;
-  border: none;
-  border-radius: 0.5rem;
-  cursor: pointer;
-  transition: all 0.2s;
+  color: var(--text-primary);
 }
-
-.dropdown-item:hover {
-  background-color: #f1f5f9;
-  color: var(--primary-color);
+.brand-logo {
+  width: 38px;
+  height: 38px;
 }
-
-.dropdown-item.logout {
-  color: #ef4444;
-  margin-top: 0.25rem;
-  border-top: 1px solid #f1f5f9;
-  border-radius: 0 0 0.5rem 0.5rem;
-}
-
-.dropdown-item.logout:hover {
-  background-color: #fef2f2;
-}
-
-.icon {
-  font-size: 1.1rem;
-}
-
-/* Hamburger Button */
-.hamburger-btn {
-  display: none;
+.brand-text {
+  display: flex;
   flex-direction: column;
-  justify-content: space-between;
-  width: 24px;
-  height: 18px;
+  line-height: 1.1;
+}
+.brand-text strong {
+  font-size: 1rem;
+  letter-spacing: -0.01em;
+  color: var(--brand-primary);
+}
+.brand-text span {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.primary-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.nav-link {
+  position: relative;
+  padding: 0.5rem 0.85rem;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-weight: 500;
+  font-size: 0.95rem;
+  transition: color 0.15s ease;
+}
+.nav-link:hover {
+  color: var(--text-primary);
+  background: var(--surface-muted);
+}
+.nav-link.is-active {
+  color: var(--brand-primary);
+}
+.nav-link.is-active::after {
+  content: '';
+  position: absolute;
+  left: 0.85rem;
+  right: 0.85rem;
+  bottom: 0.25rem;
+  height: 2px;
+  background: var(--brand-accent);
+  border-radius: 1px;
+}
+
+.hamburger {
+  display: none;
+  width: 40px;
+  height: 40px;
   background: transparent;
   border: none;
   cursor: pointer;
   padding: 0;
-  z-index: 1001;
+  position: relative;
 }
-
-.hamburger-btn span {
-  width: 100%;
+.hamburger span {
+  position: absolute;
+  left: 8px;
+  right: 8px;
   height: 2px;
-  background-color: var(--text-color);
-  transition: all 0.3s ease;
-  transform-origin: center;
+  background: var(--text-primary);
+  border-radius: 1px;
+  transition:
+    transform 0.25s ease,
+    opacity 0.2s ease;
 }
-
-.hamburger-btn.is-active span:nth-child(1) {
-  transform: translateY(8px) rotate(45deg);
+.hamburger span:nth-child(1) {
+  top: 13px;
 }
-
-.hamburger-btn.is-active span:nth-child(2) {
+.hamburger span:nth-child(2) {
+  top: 19px;
+}
+.hamburger span:nth-child(3) {
+  top: 25px;
+}
+.hamburger.is-active span:nth-child(1) {
+  transform: translateY(6px) rotate(45deg);
+}
+.hamburger.is-active span:nth-child(2) {
   opacity: 0;
 }
-
-.hamburger-btn.is-active span:nth-child(3) {
-  transform: translateY(-8px) rotate(-45deg);
+.hamburger.is-active span:nth-child(3) {
+  transform: translateY(-6px) rotate(-45deg);
 }
 
-/* Mobile Menu */
-.mobile-menu {
-  display: none;
+/* ── Mobile drawer ─────────────────────────────────────────────────────── */
+
+.drawer-backdrop {
   position: fixed;
-  top: 70px;
-  left: 0;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.4);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+  z-index: 49;
+}
+.drawer-backdrop.is-open {
+  opacity: 1;
+  pointer-events: auto;
+}
+.drawer {
+  position: fixed;
+  top: 0;
   right: 0;
   bottom: 0;
-  background-color: var(--white);
-  z-index: 999;
+  width: min(320px, 85vw);
+  background: var(--surface-card);
+  z-index: 60;
   transform: translateX(100%);
-  transition: transform 0.3s ease;
-  overflow-y: auto;
+  transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+  display: flex;
+  flex-direction: column;
+  padding: calc(var(--nav-height) + 1rem) 1.5rem 1.5rem;
+  gap: 0.25rem;
+  box-shadow: var(--shadow-lg);
 }
-
-.mobile-menu.is-open {
+.drawer.is-open {
   transform: translateX(0);
 }
-
-.mobile-nav {
-  display: flex;
-  flex-direction: column;
-  padding: 2rem;
-}
-
-.mobile-nav a {
-  font-size: 1.1rem;
-  padding: 1rem 0;
-  border-bottom: 1px solid var(--border-color);
+.drawer-link {
+  padding: 0.85rem 1rem;
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
   font-weight: 500;
 }
-
-.mobile-nav a:last-child {
-  border-bottom: none;
+.drawer-link:hover {
+  background: var(--surface-muted);
 }
 
-.mobile-nav a.router-link-active {
-  color: var(--primary-color);
-}
+/* ── Footer ────────────────────────────────────────────────────────────── */
 
-/* Footer Styling */
-.full-width-footer {
-  position: relative;
-  background-color: var(--background-dark);
-  color: var(--white);
-  padding: 4rem 0 0;
-  width: 100vw;
-  left: 50%;
-  right: 50%;
-  margin-left: -50vw;
-  margin-right: -50vw;
-  margin-top: 3rem;
+.public-footer {
+  background: var(--brand-primary);
+  color: #cbd5e1;
+  margin-top: 4rem;
 }
-
-.footer-container {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 0 2rem;
+.public-footer h3,
+.public-footer h4 {
+  color: var(--text-on-brand);
+  margin: 0 0 0.75rem;
 }
-
-.footer-main {
-  display: grid;
-  grid-template-columns: 1fr 2fr;
-  gap: 3rem;
-  margin-bottom: 3rem;
-}
-
-.footer-brand {
-  display: flex;
-  flex-direction: column;
-}
-
-.footer-logo {
-  display: flex;
-  align-items: flex-start;
-  margin-bottom: 1.5rem;
-}
-
-.footer-logo img {
-  margin-right: 1rem;
-}
-
-.footer-logo h3 {
-  font-size: 1rem;
-  font-weight: 600;
-  line-height: 1.5;
-}
-
-.footer-tagline {
-  font-size: 1.1rem;
-  font-style: italic;
-  color: var(--secondary-color);
-  margin-top: 0.5rem;
-}
-
-.footer-links {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 2rem;
-}
-
-.footer-section h4 {
-  color: var(--secondary-color);
-  margin-bottom: 1.5rem;
-  font-size: 1.1rem;
-  font-weight: 600;
-  position: relative;
-  padding-bottom: 0.75rem;
-}
-
-.footer-section h4::after {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  width: 50px;
-  height: 2px;
-  background-color: var(--secondary-color);
-}
-
-.footer-nav {
-  display: flex;
-  flex-direction: column;
-}
-
-.footer-nav a {
-  color: rgba(255, 255, 255, 0.8);
-  font-size: 0.95rem;
-  margin-bottom: 0.75rem;
-  transition: all 0.2s ease;
-  position: relative;
-  padding-left: 0;
-}
-
-.footer-nav a:hover {
-  color: var(--secondary-color);
-  padding-left: 5px;
-}
-
-.contact-info {
-  font-style: normal;
-  margin-top: 0.5rem;
-}
-
-.contact-item {
-  display: flex;
-  margin-bottom: 1.2rem;
-  align-items: center;
-}
-
-.contact-icon {
-  margin-right: 0.75rem;
-  font-style: normal;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.footer .contact-item a,
-.footer .contact-item span,
-.full-width-footer .contact-item a,
-.full-width-footer .contact-item span {
-  color: rgba(255, 255, 255, 0.8);
-  font-size: 0.95rem;
-  line-height: 1.5;
-}
-
-.footer .contact-item a:hover,
-.full-width-footer .contact-item a:hover {
-  color: #00a0e3;
-}
-
-.footer-social {
-  padding-bottom: 2rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  text-align: center;
-}
-
-.footer-social h4 {
-  color: var(--secondary-color);
-  margin-bottom: 1.5rem;
-  font-size: 1.1rem;
-  font-weight: 600;
-}
-
-.social-icons {
-  display: flex;
-  justify-content: center;
-  gap: 1.5rem;
-}
-
-.social-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  background-color: rgba(255, 255, 255, 0.1);
-  transition: all 0.3s ease;
-  color: rgba(255, 255, 255, 0.9);
-}
-
-.social-icon:hover {
-  transform: translateY(-5px);
-  background-color: var(--secondary-color);
-}
-
-.footer-bottom {
-  background-color: rgba(0, 0, 0, 0.2);
-  padding: 1.5rem 0;
-  text-align: center;
-  margin-top: 2rem;
-}
-
-.copyright {
+.public-footer h4 {
   font-size: 0.85rem;
-  color: rgba(255, 255, 255, 0.6);
-  line-height: 1.5;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.footer-grid {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 1.2fr;
+  gap: 2.5rem;
+  padding: 3rem 1.25rem 2rem;
+}
+.footer-brand-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.footer-logo {
+  width: 44px;
+  height: 44px;
+}
+.footer-tagline {
+  margin-top: 0.75rem;
+  color: #e2e8f0;
+  font-style: italic;
+}
+.footer-address {
+  margin-top: 0.75rem;
+  color: #94a3b8;
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+.footer-col ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.footer-col li {
+  font-size: 0.92rem;
+}
+.footer-col a {
+  color: #cbd5e1;
+}
+.footer-col a:hover {
+  color: var(--text-on-brand);
+}
+.contact-list li {
+  display: flex;
+  flex-direction: column;
+}
+.contact-list .muted {
+  color: #64748b;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.social-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+.social-chip {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-on-brand);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.9rem;
+  transition: background 0.2s ease;
+}
+.social-chip:hover {
+  background: var(--brand-accent);
+  color: var(--text-on-brand);
+}
+.footer-bottom {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 1rem 0;
+  font-size: 0.85rem;
+  color: #94a3b8;
+}
+.footer-bottom .container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
 }
 
-/* Responsive Footer */
-@media (max-width: 992px) {
-  .footer-main {
-    grid-template-columns: 1fr;
-    gap: 2rem;
-  }
+/* ── Responsive ────────────────────────────────────────────────────────── */
 
-  .footer-brand {
-    text-align: center;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-  }
-
-  .footer-logo {
-    justify-content: center;
-    text-align: center;
-    align-items: center !important;
-    flex-direction: column !important;
-    width: 100%;
-  }
-
-  .footer-logo img {
-    margin-right: 0 !important;
-    margin-bottom: 1rem !important;
-  }
-
-  .footer-logo h3 {
-    text-align: center !important;
-    width: 100%;
-  }
-
-  .footer-tagline {
-    text-align: center;
-    width: 100%;
-  }
-}
-
-@media (max-width: 768px) {
-  .full-width-footer {
-    padding: 3rem 0 0;
-  }
-
-  .footer-links {
-    grid-template-columns: 1fr;
-    gap: 2rem;
-  }
-
-  .footer-section {
-    text-align: center;
-  }
-
-  .footer-section h4::after {
-    left: 50%;
-    transform: translateX(-50%);
-  }
-
-  .footer-nav a:hover {
-    padding-left: 0;
-  }
-
-  .contact-item {
-    justify-content: center;
-  }
-
-  .footer-container {
-    padding: 0 1.5rem;
-  }
-
-  .footer-nav a {
-    text-align: center;
-  }
-
-  .contact-info {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-  }
-
-  .footer-logo {
-    flex-direction: column;
-    align-items: center;
-    width: 100%;
-    text-align: center;
-  }
-
-  .footer-logo img {
-    margin-right: 0;
-    margin-bottom: 1rem;
-  }
-
-  .footer-logo h3 {
-    text-align: center;
-    width: 100%;
-  }
-}
-
-@media (max-width: 480px) {
-  .footer-logo {
-    flex-direction: column;
-    align-items: center;
-    width: 100%;
-    text-align: center;
-  }
-
-  .footer-logo img {
-    margin-right: 0;
-    margin-bottom: 1rem;
-  }
-
-  .footer-logo h3 {
-    text-align: center;
-    font-size: 0.9rem;
-    width: 100%;
-  }
-
-  .footer-tagline {
-    text-align: center;
-    width: 100%;
-    font-size: 0.95rem;
-  }
-
-  .footer-section h4 {
-    font-size: 1rem;
-  }
-
-  .footer-nav a {
-    font-size: 0.9rem;
-    margin-bottom: 0.6rem;
-  }
-
-  .contact-item {
-    margin-bottom: 1rem;
-  }
-
-  .social-icons {
-    flex-wrap: wrap;
-    justify-content: center;
-  }
-
-  .social-icon {
-    width: 36px;
-    height: 36px;
-  }
-
-  .footer-bottom {
-    padding: 1rem 0;
-  }
-
-  .copyright {
-    font-size: 0.8rem;
-  }
-
-  .footer-container {
-    padding: 0 1rem;
-  }
-}
-
-/* Minimal screen size for very small devices */
-@media (max-width: 360px) {
-  .footer-logo h3 {
-    font-size: 0.85rem;
-  }
-
-  .footer-tagline {
-    font-size: 0.9rem;
-  }
-
-  .social-icons {
-    gap: 1rem;
-  }
-
-  .social-icon {
-    width: 32px;
-    height: 32px;
-  }
-
-  .contact-icon svg {
-    width: 16px;
-    height: 16px;
-  }
-}
-
-/* Responsive Styles */
-@media (max-width: 888px) {
-  .navbar {
-    padding: 0 1rem;
-  }
-
-  .desktop-menu {
+@media (max-width: 860px) {
+  .primary-nav {
     display: none;
   }
-
-  .hamburger-btn {
-    display: flex;
+  .hamburger {
+    display: inline-flex;
   }
-
-  .mobile-menu {
-    display: block;
+  .footer-grid {
+    grid-template-columns: 1fr;
+    gap: 2rem;
   }
-
-  .footer-container {
-    padding: 0 1.5rem;
-  }
-
-  .footer-content {
-    flex-direction: column;
-  }
-
-  .footer-section {
-    margin-right: 0;
-    margin-bottom: 2rem;
-  }
-
-  .social-links {
-    flex-direction: column;
-  }
-
-  .social-links a {
-    margin-right: 0;
-    margin-bottom: 0.75rem;
-  }
-
-  .copyright {
-    padding: 1rem;
-  }
-}
-
-@media (max-width: 480px) {
-  .navbar {
-    height: 60px;
-  }
-
-  .logo {
-    width: 32px;
-    height: 32px;
-  }
-
-  .logo-text {
-    font-size: 1rem;
-  }
-
-  main {
-    padding-top: 60px;
-  }
-
-  .mobile-menu {
-    top: 60px;
-  }
-
-  .footer-top {
-    margin-bottom: 1.5rem;
-  }
-
-  .footer-section h4 {
-    margin-bottom: 1rem;
+  .brand-text span {
+    display: none;
   }
 }
 </style>

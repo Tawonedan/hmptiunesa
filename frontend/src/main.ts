@@ -1,4 +1,6 @@
-import './assets/main.css'
+// Design system tokens & utility classes — replaces the legacy Vue starter
+// main.css / base.css. Phase 5 will fully retire the old assets directory.
+import './assets/pillars.css'
 
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'

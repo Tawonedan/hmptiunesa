@@ -1,0 +1,316 @@
+/* =============================================================================
+   Global Design Tokens & Utility Classes
+   Modern, visually rich design system used across all 5-pillar public pages.
+   ============================================================================= */
+
+:root {
+  /* Brand palette — confident, university-grade */
+  --brand-primary: #0a2540;
+  --brand-primary-hover: #0d3160;
+  --brand-primary-deep: #061a30;
+  --brand-accent: #3b6cf4;
+  --brand-accent-hover: #2952c8;
+  --brand-accent-soft: #e8efff;
+  --brand-highlight: #ff7a59;
+  --brand-highlight-soft: #ffe7df;
+  --brand-gold: #fbbf24;
+
+  /* Gradient stops used in hero/CTA backgrounds */
+  --gradient-hero: linear-gradient(135deg, #0a2540 0%, #1e4a8c 45%, #3b6cf4 100%);
+  --gradient-accent: linear-gradient(135deg, #ff7a59 0%, #f59e0b 100%);
+  --gradient-cool: linear-gradient(135deg, #0ea5e9 0%, #3b6cf4 100%);
+  --gradient-soft: linear-gradient(180deg, #f7f9fc 0%, #eef2f7 100%);
+
+  /* Surfaces */
+  --surface-page: #f5f7fb;
+  --surface-card: #ffffff;
+  --surface-elevated: #ffffff;
+  --surface-muted: #eef2f7;
+  --surface-dark: #0a2540;
+
+  /* Text */
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #64748b;
+  --text-on-brand: #ffffff;
+  --text-on-dark: #e2e8f0;
+
+  /* Borders */
+  --border-subtle: #e2e8f0;
+  --border-strong: #cbd5e1;
+
+  /* Status */
+  --status-upcoming: #2563eb;
+  --status-upcoming-bg: #dbeafe;
+  --status-ongoing: #16a34a;
+  --status-ongoing-bg: #dcfce7;
+  --status-completed: #64748b;
+  --status-completed-bg: #f1f5f9;
+  --status-cancelled: #dc2626;
+  --status-cancelled-bg: #fee2e2;
+  --status-error: #dc2626;
+  --status-success: #16a34a;
+
+  /* Effects — layered for depth */
+  --shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.06), 0 1px 2px rgba(15, 23, 42, 0.04);
+  --shadow-md: 0 4px 12px rgba(15, 23, 42, 0.08), 0 2px 4px rgba(15, 23, 42, 0.04);
+  --shadow-lg: 0 16px 36px rgba(15, 23, 42, 0.12), 0 4px 12px rgba(15, 23, 42, 0.06);
+  --shadow-xl: 0 24px 60px rgba(15, 23, 42, 0.18), 0 8px 24px rgba(15, 23, 42, 0.08);
+  --shadow-glow: 0 12px 40px rgba(59, 108, 244, 0.25);
+
+  /* Geometry */
+  --radius-sm: 6px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-xl: 28px;
+  --radius-pill: 999px;
+
+  /* Layout */
+  --container-max: 1200px;
+  --content-max: 900px;
+  --nav-height: 76px;
+
+  /* Motion */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  font-family:
+    'Inter',
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    Roboto,
+    'Helvetica Neue',
+    Arial,
+    sans-serif;
+  background: var(--surface-page);
+  color: var(--text-primary);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  font-size: 16px;
+}
+
+a {
+  color: var(--brand-accent);
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+a:hover {
+  color: var(--brand-accent-hover);
+}
+
+h1, h2, h3, h4 {
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+/* ── Container ──────────────────────────────────────────────────────────── */
+
+.container {
+  width: 100%;
+  max-width: var(--container-max);
+  margin: 0 auto;
+  padding: 0 1.5rem;
+}
+
+.content {
+  width: 100%;
+  max-width: var(--content-max);
+  margin: 0 auto;
+  padding: 0 1.5rem;
+}
+
+/* ── Buttons ───────────────────────────────────────────────────────────── */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.85rem 1.75rem;
+  border-radius: var(--radius-pill);
+  font-weight: 600;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease,
+    transform 0.15s var(--ease-out),
+    box-shadow 0.2s ease;
+  border: 2px solid transparent;
+  text-decoration: none;
+  line-height: 1.2;
+}
+.btn:hover {
+  transform: translateY(-2px);
+}
+.btn:active {
+  transform: translateY(0);
+}
+.btn-primary {
+  background: var(--brand-primary);
+  color: var(--text-on-brand);
+  box-shadow: 0 4px 12px rgba(10, 37, 64, 0.25);
+}
+.btn-primary:hover {
+  background: var(--brand-primary-hover);
+  color: var(--text-on-brand);
+  box-shadow: 0 8px 24px rgba(10, 37, 64, 0.35);
+}
+.btn-accent {
+  background: var(--brand-accent);
+  color: var(--text-on-brand);
+  box-shadow: 0 4px 12px rgba(59, 108, 244, 0.3);
+}
+.btn-accent:hover {
+  background: var(--brand-accent-hover);
+  color: var(--text-on-brand);
+  box-shadow: var(--shadow-glow);
+}
+.btn-highlight {
+  background: linear-gradient(135deg, #ff7a59 0%, #f59e0b 100%);
+  color: #ffffff;
+  box-shadow: 0 4px 14px rgba(255, 122, 89, 0.35);
+}
+.btn-highlight:hover {
+  color: #ffffff;
+  box-shadow: 0 8px 24px rgba(255, 122, 89, 0.45);
+}
+.btn-outline {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--brand-primary);
+  border-color: var(--brand-primary);
+}
+.btn-outline:hover {
+  background: var(--brand-primary);
+  color: var(--text-on-brand);
+  box-shadow: 0 6px 18px rgba(10, 37, 64, 0.2);
+}
+.btn-outline-light {
+  background: transparent;
+  color: var(--text-on-brand);
+  border-color: rgba(255, 255, 255, 0.4);
+}
+.btn-outline-light:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.8);
+  color: var(--text-on-brand);
+}
+.btn-ghost {
+  background: transparent;
+  color: var(--text-primary);
+}
+.btn-ghost:hover {
+  background: var(--surface-muted);
+  color: var(--brand-accent);
+}
+
+/* ── Cards ──────────────────────────────────────────────────────────────── */
+
+.card {
+  background: var(--surface-card);
+  border-radius: var(--radius-lg);
+  padding: 1.5rem;
+  box-shadow: var(--shadow-md);
+  border: 1px solid var(--border-subtle);
+  position: relative;
+}
+.card-hover {
+  transition:
+    transform 0.25s var(--ease-out),
+    box-shadow 0.25s ease;
+}
+.card-hover:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-xl);
+}
+
+/* ── Section heading ────────────────────────────────────────────────────── */
+
+.section-heading {
+  text-align: center;
+  margin-bottom: 3.5rem;
+  max-width: 720px;
+  margin-left: auto;
+  margin-right: auto;
+}
+.section-heading h2 {
+  font-size: clamp(1.875rem, 4vw, 2.625rem);
+  font-weight: 800;
+  color: var(--text-primary);
+  margin: 0 0 0.75rem;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+}
+.section-heading p {
+  color: var(--text-secondary);
+  font-size: 1.075rem;
+  margin: 0;
+  line-height: 1.6;
+}
+.eyebrow {
+  display: inline-block;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--brand-accent);
+  margin-bottom: 0.65rem;
+  padding: 0.3rem 0.75rem;
+  background: var(--brand-accent-soft);
+  border-radius: var(--radius-pill);
+}
+
+/* ── Status badge ───────────────────────────────────────────────────────── */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.3rem 0.85rem;
+  border-radius: var(--radius-pill);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.badge-upcoming {
+  background: var(--status-upcoming-bg);
+  color: var(--status-upcoming);
+}
+.badge-ongoing {
+  background: var(--status-ongoing-bg);
+  color: var(--status-ongoing);
+}
+.badge-completed {
+  background: var(--status-completed-bg);
+  color: var(--status-completed);
+}
+.badge-cancelled {
+  background: var(--status-cancelled-bg);
+  color: var(--status-cancelled);
+}
+
+/* ── Utility ────────────────────────────────────────────────────────────── */
+
+.text-center {
+  text-align: center;
+}
+.muted {
+  color: var(--text-muted);
+}
+.small {
+  font-size: 0.875rem;
+}

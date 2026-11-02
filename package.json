@@ -1,0 +1,15 @@
+{
+  "name": "web_hmptiunesa",
+  "version": "1.0.0",
+  "private": true,
+  "description": "HMPTI UNESA Web Portal & CMS",
+  "scripts": {
+    "dev": "npm --prefix frontend run dev",
+    "dev:frontend": "npm --prefix frontend run dev",
+    "dev:backend": "npm --prefix backend run dev",
+    "build": "npm --prefix frontend run build",
+    "build-only": "npm --prefix frontend run build-only",
+    "type-check": "npm --prefix frontend run type-check",
+    "lint": "npm --prefix frontend run lint"
+  }
+}
